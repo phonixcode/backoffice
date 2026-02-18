@@ -14,6 +14,7 @@ const INITIAL_RESOURCES = [
   { name: 'leave',       displayName: 'Leave',       description: 'Manage employee leave requests' },
   { name: 'resources',   displayName: 'Resources',   description: 'Manage system resources' },
   { name: 'roles',       displayName: 'Roles',       description: 'Manage system roles' },
+  { name: 'users',       displayName: 'Users',       description: 'Manage system users' },
 ];
 
 // custom actions on top of CRUD
