@@ -26,12 +26,14 @@ const authorize = (resourceOrAction = null, customAction = null) => {
       resourceName = resourceOrAction;
       action = customAction;
     } else if (resourceOrAction) {
-      // only one arg — treat it as a custom action, derive resource from URL
-      resourceName = req.baseUrl.split('/').filter(Boolean)[1];
+      // only one arg — treat as custom action, derive resource from URL
+      const parts = req.baseUrl.split('/').filter(Boolean);
+      resourceName = parts[parts.length - 1];
       action = resourceOrAction;
     } else {
       // nothing provided — derive everything from request
-      resourceName = req.baseUrl.split('/').filter(Boolean)[1];
+      const parts = req.baseUrl.split('/').filter(Boolean);
+      resourceName = parts[parts.length - 1];
       action = METHOD_ACTION_MAP[req.method];
     }
 

@@ -26,6 +26,10 @@ const CUSTOM_ACTIONS = {
   leave: [
     { action: 'approve',  description: 'Approve a leave request' },
     { action: 'reject',   description: 'Reject a leave request' },
+    { action: 'cancel',   description: 'Cancel a leave request' }
+  ],
+  employees: [
+    { action: 'terminate', description: 'Terminate an employee' }
   ]
 };
 
