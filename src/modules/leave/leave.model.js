@@ -14,8 +14,8 @@ const leaveSchema = new mongoose.Schema({
   startDate: { type: Date, required: true },
   endDate:   { type: Date, required: true },
   days: {
-    type: Number,  // auto-calculated
-    required: true
+    type: Number, 
+    default: 0
   },
   reason: {
     type: String,

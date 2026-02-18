@@ -5,7 +5,7 @@ const Joi = require('joi');
 
 const createSchema = Joi.object({
   type:      Joi.string().valid('annual', 'sick', 'maternity', 'paternity', 'unpaid', 'other').required(),
-  startDate: Joi.date().min('now').required(),
+  startDate: Joi.date().required(),                              
   endDate:   Joi.date().greater(Joi.ref('startDate')).required(),
   reason:    Joi.string().trim().min(10).required()
 });
