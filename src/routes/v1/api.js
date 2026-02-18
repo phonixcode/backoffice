@@ -8,5 +8,6 @@ router.use('/employees',            require('../../modules/employees/employee.ro
 router.use('/departments',          require('../../modules/departments/department.routes'));
 router.use('/payroll',              require('../../modules/payroll/payroll.routes'));
 router.use('/leave',                require('../../modules/leave/leave.routes'));
+router.use('/audit',                require('../../modules/audit/audit.routes'));
 
 module.exports = router;

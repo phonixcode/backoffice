@@ -15,6 +15,7 @@ const INITIAL_RESOURCES = [
   { name: 'resources',   displayName: 'Resources',   description: 'Manage system resources' },
   { name: 'roles',       displayName: 'Roles',       description: 'Manage system roles' },
   { name: 'users',       displayName: 'Users',       description: 'Manage system users' },
+  { name: 'audit',       displayName: 'Audit Logs',  description: 'View system audit logs' },
 ];
 
 // custom actions on top of CRUD

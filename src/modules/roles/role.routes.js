@@ -2,8 +2,10 @@ const router = require('express').Router();
 const roleController = require('./role.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
+const auditLogger = require('../../middleware/auditLogger');
 
 router.use(authenticate);
+router.use(auditLogger);
 
 router.post('/',                          authorize('roles', 'create'), roleController.create);
 router.get('/',                           authorize('roles', 'list'),   roleController.getAll);

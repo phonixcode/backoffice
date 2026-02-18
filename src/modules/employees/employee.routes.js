@@ -2,8 +2,10 @@ const router = require('express').Router();
 const employeeController = require('./employee.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
+const auditLogger = require('../../middleware/auditLogger');
 
 router.use(authenticate);
+router.use(auditLogger);
 
 router.get('/',                     authorize(), employeeController.getAll);
 router.post('/',                    authorize(), employeeController.create);

@@ -1,7 +1,9 @@
 const router = require('express').Router();
+const auditLogger = require('../../middleware/auditLogger');
 const authenticate = require('../../middleware/authenticate');
 const authController = require('./auth.controller');
 
+router.use(auditLogger);
 
 router.post('/register',            authController.register);
 router.post('/login',               authController.login);

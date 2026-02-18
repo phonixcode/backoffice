@@ -2,8 +2,10 @@ const router = require('express').Router();
 const leaveController = require('./leave.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
+const auditLogger = require('../../middleware/auditLogger');
 
 router.use(authenticate);
+router.use(auditLogger);
 
 router.get('/',                authorize('leave', 'list'),    leaveController.getAll);
 router.get('/:id',             authorize('leave', 'read'),    leaveController.getOne);
