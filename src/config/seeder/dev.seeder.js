@@ -1,16 +1,21 @@
 const mongoose = require('mongoose');
 const { faker } = require('@faker-js/faker');
-const connectDB = require('./db');
-const User = require('../modules/users/user.model');
-const Role = require('../modules/roles/role.model');
-const Resource = require('../modules/resources/resource.model');
-const Permission = require('../modules/permissions/permission.model');
-const Department = require('../modules/departments/department.model');
-const Employee = require('../modules/employees/employee.model');
-const Payroll = require('../modules/payroll/payroll.model');
-const Leave = require('../modules/leave/leave.model');
-const AuditLog = require('../modules/audit/auditLog.model');
+const connectDB = require('../db');
+const User = require('../../modules/users/user.model');
+const Role = require('../../modules/roles/role.model');
+const Resource = require('../../modules/resources/resource.model');
+const Permission = require('../../modules/permissions/permission.model');
+const Department = require('../../modules/departments/department.model');
+const Employee = require('../../modules/employees/employee.model');
+const Payroll = require('../../modules/payroll/payroll.model');
+const Leave = require('../../modules/leave/leave.model');
+const AuditLog = require('../../modules/audit/auditLog.model');
 const bcrypt = require('bcryptjs');
+
+const SEED_EMPLOYEES = Math.max(1, parseInt(process.env.SEED_EMPLOYEES || '1500', 10));
+const SEED_AUDIT_LOGS = Math.max(0, parseInt(process.env.SEED_AUDIT_LOGS || '2000', 10));
+const SEED_BULK_BATCH_SIZE = Math.min(50000, Math.max(1000, parseInt(process.env.SEED_BULK_BATCH_SIZE || '10000', 10)));
+const FIXED_ROLES_COUNT = 25;
 
 // ─── Nigerian Context ───────────────────────────────────────────────────────
 
@@ -381,16 +386,19 @@ async function seedUsersAndEmployees(roles, departments) {
   console.log('\n Seeding users and employees...');
 
   const existingCount = await User.countDocuments({ email: { $ne: 'superadmin@backoffice.com' } });
-  if (existingCount >= 1499) {
+  if (existingCount >= SEED_EMPLOYEES - 1) {
     console.log('  Users already seeded — skipping');
-    const employees = await Employee.find().lean();
-    return employees;
+    return Employee.find().lean();
   }
 
   const deptList = Object.values(departments);
   const hashedPassword = await bcrypt.hash('Password@123', 12);
 
-  // ── Super Admin ──
+  const rolePerms = {};
+  for (const [key, role] of Object.entries(roles)) {
+    rolePerms[key] = await getPermissionNames(role.permissions);
+  }
+
   let superAdmin = await User.findOne({ email: 'superadmin@backoffice.com' });
   if (!superAdmin) {
     superAdmin = await User.create({
@@ -399,9 +407,7 @@ async function seedUsersAndEmployees(roles, departments) {
       email:            'superadmin@backoffice.com',
       password:         'Password@123',
       roles:            [roles['super_admin']._id],
-      permissionsCache: roles['super_admin'].permissions.map
-                        ? await getPermissionNames(roles['super_admin'].permissions)
-                        : [],
+      permissionsCache: rolePerms['super_admin'] || [],
       isActive: true
     });
     console.log('  Super admin created');
@@ -416,23 +422,14 @@ async function seedUsersAndEmployees(roles, departments) {
     firstName, lastName, email, roleKey,
     department, jobTitle, salaryOverride
   }) {
-    const user = new User({
-      firstName,
-      lastName,
-      email,
-      password:         hashedPassword,
-      roles:            [roles[roleKey]._id],
-      permissionsCache: await getPermissionNames(roles[roleKey].permissions),
-      isActive:         true
-    });
-    user.$skipPasswordHash = true;
+    const permCache = rolePerms[roleKey] || [];
     await User.collection.insertOne({
       firstName,
       lastName,
       email,
       password:         hashedPassword,
       roles:            [roles[roleKey]._id],
-      permissionsCache: await getPermissionNames(roles[roleKey].permissions),
+      permissionsCache: permCache,
       isActive:         true,
       tokenVersion:     0,
       createdAt:        new Date(),
@@ -558,8 +555,6 @@ async function seedUsersAndEmployees(roles, departments) {
     allEmployees.push({ ...employee, _userId: user._id });
   }
 
-  // ── Senior Employees (200) ──
-  console.log('  → Creating senior employees (200)...');
   const JOB_TITLES = {
     engineering:      ['Senior Software Engineer', 'Lead Engineer', 'Principal Engineer', 'Tech Lead'],
     devops:           ['Senior DevOps Engineer', 'Cloud Architect', 'Infrastructure Lead'],
@@ -574,77 +569,6 @@ async function seedUsersAndEmployees(roles, departments) {
     'customer support': ['Senior Support Manager', 'Customer Success Lead'],
     executive:        ['Chief of Staff', 'Executive Assistant', 'Strategy Lead']
   };
-
-  const seniorBatchUsers    = [];
-  const seniorBatchEmployees = [];
-
-  for (let i = 0; i < 200; i++) {
-    const dept   = faker.helpers.arrayElement(deptList);
-    const gender = faker.helpers.arrayElement(['male', 'female']);
-    const { firstName, lastName } = getNigerianName(gender);
-    const email  = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@backoffice.ng`;
-
-    const titles  = JOB_TITLES[dept.name.toLowerCase()] || ['Senior Associate'];
-    const jobTitle = faker.helpers.arrayElement(titles);
-    const salary   = getSalaryForDept(dept.name);
-
-    seniorBatchUsers.push({
-      firstName,
-      lastName,
-      email,
-      password:         hashedPassword,
-      roles:            [roles['senior_employee']._id],
-      permissionsCache: await getPermissionNames(roles['senior_employee'].permissions),
-      isActive:         true,
-      tokenVersion:     0,
-      createdAt:        new Date(),
-      updatedAt:        new Date()
-    });
-
-    seniorBatchEmployees.push({
-      employeeId: `EMP${String(employeeCounter + i).padStart(4, '0')}`,
-      department: dept._id,
-      jobTitle,
-      employmentType:   'full_time',
-      employmentStatus: 'active',
-      startDate: faker.date.between({ from: '2019-01-01', to: '2023-01-01' }),
-      salary: { amount: salary, currency: 'NGN', frequency: 'monthly' },
-      phone:   getNigerianPhone(),
-      address: getNigerianAddress(),
-      emergencyContact: {
-        name:         `${getNigerianName(gender).firstName} ${faker.helpers.arrayElement(NIGERIAN_LAST_NAMES)}`,
-        relationship: faker.helpers.arrayElement(['Spouse', 'Parent', 'Sibling']),
-        phone:        getNigerianPhone()
-      },
-      bankDetails: {
-        bankName:      getNigerianBank(),
-        accountNumber: getAccountNumber(),
-        accountName:   `${firstName} ${lastName}`
-      },
-      isActive: true
-    });
-  }
-
-  employeeCounter += 200;
-
-  // insert senior users in batch
-  await User.collection.insertMany(seniorBatchUsers, { ordered: false });
-  const seniorUsers = await User.find({
-    email: { $in: seniorBatchUsers.map(u => u.email) }
-  }).lean();
-
-  // attach user ids to employee records
-  seniorUsers.forEach((user, idx) => {
-    if (seniorBatchEmployees[idx]) {
-      seniorBatchEmployees[idx].user = user._id;
-    }
-  });
-
-  await batchInsert(Employee, seniorBatchEmployees.filter(e => e.user));
-  console.log(`  Senior employees created`);
-
-  // ── Regular Employees (1269 to hit ~1500 total) ──
-  console.log('  → Creating regular employees (1269)...');
 
   const REGULAR_JOB_TITLES = {
     engineering:      ['Software Engineer', 'Backend Engineer', 'Frontend Engineer', 'Mobile Engineer', 'QA Engineer'],
@@ -661,78 +585,115 @@ async function seedUsersAndEmployees(roles, departments) {
     executive:        ['Executive Officer', 'Corporate Affairs Officer']
   };
 
-  const regularBatchUsers     = [];
-  const regularBatchEmployees = [];
+  const bulkSeniorCount = Math.min(200, Math.floor((SEED_EMPLOYEES - FIXED_ROLES_COUNT) * 0.15));
+  const bulkRegularCount = SEED_EMPLOYEES - FIXED_ROLES_COUNT - bulkSeniorCount;
+  const seniorPerms = rolePerms['senior_employee'] || [];
+  const employeePerms = rolePerms['employee'] || [];
+  const internPerms = rolePerms['intern'] || [];
 
-  for (let i = 0; i < 1269; i++) {
-    const dept   = faker.helpers.arrayElement(deptList);
-    const gender = faker.helpers.arrayElement(['male', 'female']);
-    const { firstName, lastName } = getNigerianName(gender);
-    const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i + 200}@backoffice.ng`;
+  async function insertBulkUsersAndEmployees({ count, roleKey, jobTitlesMap, isSenior }) {
+    const emails = [];
+    const userDocs = [];
+    const employeeDocs = [];
+    const getPerms = (intern) => (intern ? internPerms : employeePerms);
+    const getRoleKey = (intern) => (intern ? 'intern' : 'employee');
 
-    const titles   = REGULAR_JOB_TITLES[dept.name.toLowerCase()] || ['Associate'];
-    const jobTitle = faker.helpers.arrayElement(titles);
-    const salary   = Math.round(getSalaryForDept(dept.name) * 0.7); // regular staff earn ~70% of senior
+    for (let i = 0; i < count; i++) {
+      const dept = faker.helpers.arrayElement(deptList);
+      const gender = faker.helpers.arrayElement(['male', 'female']);
+      const { firstName, lastName } = getNigerianName(gender);
+      const email = `seed.${roleKey}.${employeeCounter + i}@backoffice.ng`;
+      emails.push(email);
 
-    const isTerminated = faker.datatype.boolean({ probability: 0.05 }); // 5% terminated
-    const isIntern     = faker.datatype.boolean({ probability: 0.08 }); // 8% interns
+      const titles = jobTitlesMap[dept.name.toLowerCase()] || (isSenior ? ['Senior Associate'] : ['Associate']);
+      const jobTitle = faker.helpers.arrayElement(titles);
+      const salary = isSenior
+        ? getSalaryForDept(dept.name)
+        : Math.round(getSalaryForDept(dept.name) * 0.7);
 
-    regularBatchUsers.push({
-      firstName,
-      lastName,
-      email,
-      password:         hashedPassword,
-      roles:            [roles[isIntern ? 'intern' : 'employee']._id],
-      permissionsCache: await getPermissionNames(roles[isIntern ? 'intern' : 'employee'].permissions),
-      isActive:         !isTerminated,
-      tokenVersion:     0,
-      createdAt:        faker.date.between({ from: '2020-01-01', to: '2024-06-01' }),
-      updatedAt:        new Date()
+      const isTerminated = isSenior ? false : faker.datatype.boolean({ probability: 0.05 });
+      const isIntern = isSenior ? false : faker.datatype.boolean({ probability: 0.08 });
+      const roleId = isSenior ? roles['senior_employee']._id : roles[getRoleKey(isIntern)]._id;
+      const permCache = isSenior ? seniorPerms : getPerms(isIntern);
+
+      userDocs.push({
+        firstName,
+        lastName,
+        email,
+        password:         hashedPassword,
+        roles:            [roleId],
+        permissionsCache: permCache,
+        isActive:         !isTerminated,
+        tokenVersion:     0,
+        createdAt:        isSenior ? new Date() : faker.date.between({ from: '2020-01-01', to: '2024-06-01' }),
+        updatedAt:        new Date()
+      });
+
+      const empIdLen = Math.max(6, String(SEED_EMPLOYEES).length);
+      employeeDocs.push({
+        employeeId:       `EMP${String(employeeCounter + i).padStart(empIdLen, '0')}`,
+        department:       dept._id,
+        jobTitle,
+        employmentType:   isSenior ? 'full_time' : (isIntern ? 'intern' : faker.helpers.arrayElement(['full_time', 'full_time', 'contract'])),
+        employmentStatus: isTerminated ? 'terminated' : 'active',
+        startDate:        faker.date.between({ from: isSenior ? '2019-01-01' : '2020-01-01', to: '2024-06-01' }),
+        endDate:          isTerminated ? faker.date.between({ from: '2023-01-01', to: '2024-12-01' }) : undefined,
+        salary:           { amount: salary, currency: 'NGN', frequency: 'monthly' },
+        phone:            getNigerianPhone(),
+        address:          getNigerianAddress(),
+        emergencyContact: {
+          name:         `${getNigerianName(gender).firstName} ${faker.helpers.arrayElement(NIGERIAN_LAST_NAMES)}`,
+          relationship: faker.helpers.arrayElement(['Spouse', 'Parent', 'Sibling', 'Friend']),
+          phone:        getNigerianPhone()
+        },
+        bankDetails: {
+          bankName:      getNigerianBank(),
+          accountNumber: getAccountNumber(),
+          accountName:   `${firstName} ${lastName}`
+        },
+        isActive: !isTerminated
+      });
+    }
+
+    await User.collection.insertMany(userDocs, { ordered: false });
+    const users = await User.find({ email: { $in: emails } }).lean();
+    const emailToUser = Object.fromEntries(users.map((u) => [u.email, u]));
+    employeeDocs.forEach((emp, idx) => {
+      emp.user = emailToUser[emails[idx]]?._id;
     });
-
-    regularBatchEmployees.push({
-      employeeId:       `EMP${String(employeeCounter + i).padStart(4, '0')}`,
-      department:       dept._id,
-      jobTitle,
-      employmentType:   isIntern ? 'intern' : faker.helpers.arrayElement(['full_time', 'full_time', 'contract']),
-      employmentStatus: isTerminated ? 'terminated' : 'active',
-      startDate:        faker.date.between({ from: '2020-01-01', to: '2024-06-01' }),
-      endDate:          isTerminated ? faker.date.between({ from: '2023-01-01', to: '2024-12-01' }) : undefined,
-      salary:           { amount: salary, currency: 'NGN', frequency: 'monthly' },
-      phone:            getNigerianPhone(),
-      address:          getNigerianAddress(),
-      emergencyContact: {
-        name:         `${getNigerianName(gender).firstName} ${faker.helpers.arrayElement(NIGERIAN_LAST_NAMES)}`,
-        relationship: faker.helpers.arrayElement(['Spouse', 'Parent', 'Sibling', 'Friend']),
-        phone:        getNigerianPhone()
-      },
-      bankDetails: {
-        bankName:      getNigerianBank(),
-        accountNumber: getAccountNumber(),
-        accountName:   `${firstName} ${lastName}`
-      },
-      isActive: !isTerminated
-    });
+    await batchInsert(Employee, employeeDocs.filter((e) => e.user));
+    employeeCounter += count;
   }
 
-  employeeCounter += 1269;
-
-  // insert in batches
-  console.log('  → Inserting regular users...');
-  await User.collection.insertMany(regularBatchUsers, { ordered: false });
-
-  const regularUsers = await User.find({
-    email: { $in: regularBatchUsers.map(u => u.email) }
-  }).lean();
-
-  regularUsers.forEach((user, idx) => {
-    if (regularBatchEmployees[idx]) {
-      regularBatchEmployees[idx].user = user._id;
+  if (bulkSeniorCount > 0) {
+    console.log(`  → Creating senior employees (${bulkSeniorCount})...`);
+    for (let offset = 0; offset < bulkSeniorCount; offset += SEED_BULK_BATCH_SIZE) {
+      const batchSize = Math.min(SEED_BULK_BATCH_SIZE, bulkSeniorCount - offset);
+      await insertBulkUsersAndEmployees({
+        count:        batchSize,
+        roleKey:      'senior',
+        jobTitlesMap: JOB_TITLES,
+        isSenior:     true
+      });
+      process.stdout.write(`\r  → Senior: ${Math.min(offset + SEED_BULK_BATCH_SIZE, bulkSeniorCount)}/${bulkSeniorCount}`);
     }
-  });
+    console.log();
+  }
 
-  console.log('  Inserting regular employees...');
-  await batchInsert(Employee, regularBatchEmployees.filter(e => e.user));
+  if (bulkRegularCount > 0) {
+    console.log(`  → Creating regular employees (${bulkRegularCount})...`);
+    for (let offset = 0; offset < bulkRegularCount; offset += SEED_BULK_BATCH_SIZE) {
+      const batchSize = Math.min(SEED_BULK_BATCH_SIZE, bulkRegularCount - offset);
+      await insertBulkUsersAndEmployees({
+        count:        batchSize,
+        roleKey:      'reg',
+        jobTitlesMap: REGULAR_JOB_TITLES,
+        isSenior:     false
+      });
+      process.stdout.write(`\r  → Regular: ${Math.min(offset + SEED_BULK_BATCH_SIZE, bulkRegularCount)}/${bulkRegularCount}`);
+    }
+    console.log();
+  }
 
   // assign managers to departments
   console.log('  → Assigning department heads...');
@@ -751,258 +712,232 @@ async function seedUsersAndEmployees(roles, departments) {
 
 // ─── Step 5: Payroll ──────────────────────────────────────────────────────────
 
+const PAYROLL_MONTHS = [
+  { month: 10, year: 2024 },
+  { month: 11, year: 2024 },
+  { month: 12, year: 2024 }
+];
+
 async function seedPayroll(employees) {
   console.log('\n💰 Seeding payroll (3 months)...');
 
+  const superAdmin = await User.findOne({ email: 'superadmin@backoffice.com' });
+  const financeManager = await User.findOne({ email: 'finance.manager1@backoffice.ng' });
+  const activeEmployees = employees.filter((e) => e.employmentStatus === 'active');
+  const expectedPayrollCount = activeEmployees.length * PAYROLL_MONTHS.length;
   const existingCount = await Payroll.countDocuments();
-  if (existingCount >= 4000) {
+
+  if (existingCount >= expectedPayrollCount) {
     console.log('  Payroll already seeded — skipping');
     return;
   }
 
-  const superAdmin = await User.findOne({ email: 'superadmin@backoffice.com' });
-  const financeManager = await User.findOne({ email: 'finance.manager1@backoffice.ng' });
-
-  const activeEmployees = employees.filter(e => e.employmentStatus === 'active');
-  const months = [
-    { month: 10, year: 2024 },
-    { month: 11, year: 2024 },
-    { month: 12, year: 2024 }
-  ];
-
-  for (const period of months) {
+  for (const period of PAYROLL_MONTHS) {
     console.log(`  → Processing payroll for ${period.month}/${period.year}...`);
-    const payrollBatch = [];
-
-    for (const emp of activeEmployees) {
-      const basicSalary = emp.salary?.amount || 200000;
-
-      // Nigerian allowances
-      const allowances = [
-        { name: 'Housing Allowance',   amount: Math.round(basicSalary * 0.2) },
-        { name: 'Transport Allowance', amount: Math.round(basicSalary * 0.1) },
-        { name: 'Meal Allowance',      amount: Math.round(basicSalary * 0.05) }
-      ];
-
-      // Nigerian deductions
-      const deductions = [
-        { name: 'PAYE Tax',          amount: Math.round(basicSalary * 0.15) },
-        { name: 'Pension (Employee)',amount: Math.round(basicSalary * 0.08) },
-        { name: 'NHF',               amount: Math.round(basicSalary * 0.025) }
-      ];
-
-      // random bonus for some employees
-      if (faker.datatype.boolean({ probability: 0.2 })) {
-        allowances.push({
-          name:   'Performance Bonus',
-          amount: Math.round(basicSalary * faker.number.float({ min: 0.05, max: 0.25 }))
-        });
-      }
-
-      const totalAllowances = allowances.reduce((s, a) => s + a.amount, 0);
-      const totalDeductions = deductions.reduce((s, d) => s + d.amount, 0);
-      const grossPay        = basicSalary + totalAllowances;
-      const netPay          = grossPay - totalDeductions;
-
-      const status = faker.helpers.weightedArrayElement([
-        { weight: 5,  value: 'draft' },
-        { weight: 10, value: 'pending_approval' },
-        { weight: 25, value: 'approved' },
-        { weight: 60, value: 'paid' }
-      ]);
-
-      payrollBatch.push({
-        employee:    emp._id,
-        period,
-        basicSalary,
-        allowances,
-        deductions,
-        grossPay,
-        netPay,
-        currency:    'NGN',
-        status,
-        processedBy: superAdmin._id,
-        approvedBy:  ['approved', 'paid'].includes(status) ? financeManager?._id : undefined,
-        paidAt:      status === 'paid' ? faker.date.between({
-          from: new Date(period.year, period.month - 1, 25),
-          to:   new Date(period.year, period.month - 1, 30)
-        }) : undefined
+    for (let i = 0; i < activeEmployees.length; i += SEED_BULK_BATCH_SIZE) {
+      const chunk = activeEmployees.slice(i, i + SEED_BULK_BATCH_SIZE);
+      const payrollBatch = chunk.map((emp) => {
+        const basicSalary = emp.salary?.amount || 200000;
+        const allowances = [
+          { name: 'Housing Allowance',   amount: Math.round(basicSalary * 0.2) },
+          { name: 'Transport Allowance', amount: Math.round(basicSalary * 0.1) },
+          { name: 'Meal Allowance',      amount: Math.round(basicSalary * 0.05) }
+        ];
+        const deductions = [
+          { name: 'PAYE Tax',          amount: Math.round(basicSalary * 0.15) },
+          { name: 'Pension (Employee)', amount: Math.round(basicSalary * 0.08) },
+          { name: 'NHF',               amount: Math.round(basicSalary * 0.025) }
+        ];
+        if (faker.datatype.boolean({ probability: 0.2 })) {
+          allowances.push({
+            name:   'Performance Bonus',
+            amount: Math.round(basicSalary * faker.number.float({ min: 0.05, max: 0.25 }))
+          });
+        }
+        const totalAllowances = allowances.reduce((s, a) => s + a.amount, 0);
+        const totalDeductions = deductions.reduce((s, d) => s + d.amount, 0);
+        const grossPay = basicSalary + totalAllowances;
+        const netPay = grossPay - totalDeductions;
+        const status = faker.helpers.weightedArrayElement([
+          { weight: 5,  value: 'draft' },
+          { weight: 10, value: 'pending_approval' },
+          { weight: 25, value: 'approved' },
+          { weight: 60, value: 'paid' }
+        ]);
+        return {
+          employee:    emp._id,
+          period,
+          basicSalary,
+          allowances,
+          deductions,
+          grossPay,
+          netPay,
+          currency:    'NGN',
+          status,
+          processedBy: superAdmin._id,
+          approvedBy:  ['approved', 'paid'].includes(status) ? financeManager?._id : undefined,
+          paidAt:      status === 'paid' ? faker.date.between({
+            from: new Date(period.year, period.month - 1, 25),
+            to:   new Date(period.year, period.month - 1, 30)
+          }) : undefined
+        };
       });
+      await batchInsert(Payroll, payrollBatch);
     }
-
-    await batchInsert(Payroll, payrollBatch);
     console.log(`  Payroll for ${period.month}/${period.year} done`);
   }
 }
 
 // ─── Step 6: Leave Requests ───────────────────────────────────────────────────
 
+const LEAVE_REASONS = [
+  'Annual family vacation', 'Medical appointment and recovery', 'Personal matters',
+  'Wedding ceremony attendance', 'Bereavement leave', 'Religious observance',
+  'Child care responsibilities', 'Home renovation emergency', 'Maternity leave', 'Paternity leave'
+];
+const LEAVE_REJECT_REASONS = [
+  'Insufficient leave balance', 'Critical project deadline',
+  'Team understaffed during period', 'Please reschedule to a less busy period'
+];
+
 async function seedLeaveRequests(employees) {
   console.log('\n🌴 Seeding leave requests...');
 
+  const superAdmin = await User.findOne({ email: 'superadmin@backoffice.com' });
+  const activeEmployees = employees.filter((e) => e.employmentStatus === 'active');
+  const minLeaveCount = activeEmployees.length;
   const existingCount = await Leave.countDocuments();
-  if (existingCount >= 2000) {
-    console.log('    Leave requests already seeded — skipping');
+
+  if (existingCount >= minLeaveCount) {
+    console.log('  Leave requests already seeded — skipping');
     return;
   }
 
-  const superAdmin    = await User.findOne({ email: 'superadmin@backoffice.com' });
-  const activeEmployees = employees.filter(e => e.employmentStatus === 'active');
-  const leaveBatch    = [];
-
-  for (const emp of activeEmployees) {
-    const leaveCount = faker.number.int({ min: 1, max: 3 });
-
-    for (let i = 0; i < leaveCount; i++) {
-      const startDate = faker.date.between({ from: '2024-01-01', to: '2024-12-01' });
-      const daysOff   = faker.number.int({ min: 1, max: 14 });
-      const endDate   = new Date(startDate);
-      endDate.setDate(endDate.getDate() + daysOff);
-
-      const status = faker.helpers.weightedArrayElement([
-        { weight: 20, value: 'pending'  },
-        { weight: 50, value: 'approved' },
-        { weight: 20, value: 'rejected' },
-        { weight: 10, value: 'cancelled'}
-      ]);
-
-      leaveBatch.push({
-        employee:   emp._id,
-        type:       faker.helpers.arrayElement(['annual', 'sick', 'annual', 'unpaid', 'maternity']),
-        startDate,
-        endDate,
-        days:       daysOff + 1,
-        reason:     faker.helpers.arrayElement([
-          'Annual family vacation',
-          'Medical appointment and recovery',
-          'Personal matters',
-          'Wedding ceremony attendance',
-          'Bereavement leave',
-          'Religious observance',
-          'Child care responsibilities',
-          'Home renovation emergency',
-          'Maternity leave',
-          'Paternity leave'
-        ]),
-        status,
-        reviewedBy:  ['approved', 'rejected'].includes(status) ? superAdmin._id : undefined,
-        reviewNote:  status === 'rejected'
-          ? faker.helpers.arrayElement([
-              'Insufficient leave balance',
-              'Critical project deadline',
-              'Team understaffed during period',
-              'Please reschedule to a less busy period'
-            ])
-          : status === 'approved' ? 'Approved. Enjoy your time off!' : undefined,
-        reviewedAt: ['approved', 'rejected'].includes(status) ? new Date() : undefined
-      });
+  let totalCreated = 0;
+  for (let i = 0; i < activeEmployees.length; i += SEED_BULK_BATCH_SIZE) {
+    const chunk = activeEmployees.slice(i, i + SEED_BULK_BATCH_SIZE);
+    const leaveBatch = [];
+    for (const emp of chunk) {
+      const leaveCount = faker.number.int({ min: 1, max: 3 });
+      for (let j = 0; j < leaveCount; j++) {
+        const startDate = faker.date.between({ from: '2024-01-01', to: '2024-12-01' });
+        const daysOff = faker.number.int({ min: 1, max: 14 });
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + daysOff);
+        const status = faker.helpers.weightedArrayElement([
+          { weight: 20, value: 'pending' },
+          { weight: 50, value: 'approved' },
+          { weight: 20, value: 'rejected' },
+          { weight: 10, value: 'cancelled' }
+        ]);
+        leaveBatch.push({
+          employee:   emp._id,
+          type:       faker.helpers.arrayElement(['annual', 'sick', 'annual', 'unpaid', 'maternity']),
+          startDate,
+          endDate,
+          days:       daysOff + 1,
+          reason:     faker.helpers.arrayElement(LEAVE_REASONS),
+          status,
+          reviewedBy:  ['approved', 'rejected'].includes(status) ? superAdmin._id : undefined,
+          reviewNote:  status === 'rejected'
+            ? faker.helpers.arrayElement(LEAVE_REJECT_REASONS)
+            : status === 'approved' ? 'Approved. Enjoy your time off!' : undefined,
+          reviewedAt: ['approved', 'rejected'].includes(status) ? new Date() : undefined
+        });
+      }
     }
+    if (leaveBatch.length > 0) {
+      await batchInsert(Leave, leaveBatch);
+      totalCreated += leaveBatch.length;
+    }
+    process.stdout.write(`\r  → Leave: ${totalCreated} created`);
   }
-
-  await batchInsert(Leave, leaveBatch);
-  console.log(`   ${leaveBatch.length} leave requests created`);
+  console.log();
 }
 
 // ─── Step 7: Audit Logs ───────────────────────────────────────────────────────
+
+const AUDIT_RESOURCES = ['employees', 'departments', 'payroll', 'leave', 'users', 'roles'];
+const AUDIT_ACTIONS = ['POST', 'PATCH', 'DELETE', 'GET'];
+const NIGERIAN_IPS = [
+  '197.210.84.1', '105.112.0.1', '41.58.0.1',
+  '197.255.0.1',  '196.216.0.1', '154.120.0.1'
+];
+const SUSPICIOUS_REASONS = [
+  'Repeated forbidden attempts — 6 access denied events in the last 15 minutes',
+  'High mutation volume — 23 mutating requests in the last 5 minutes',
+  'Sensitive resource "payroll" accessed at odd hours (23:00)',
+  'Bulk deletions detected — 7 delete operations in the last 10 minutes'
+];
+
+function buildAuditLogDoc(users) {
+  const user = faker.helpers.arrayElement(users);
+  const resource = faker.helpers.arrayElement(AUDIT_RESOURCES);
+  const action = faker.helpers.arrayElement(AUDIT_ACTIONS);
+  const statusCode = faker.helpers.weightedArrayElement([
+    { weight: 70, value: 200 },
+    { weight: 15, value: 400 },
+    { weight: 10, value: 403 },
+    { weight: 5,  value: 500 }
+  ]);
+  const auditStatus = statusCode === 403 ? 'forbidden' : statusCode >= 400 ? 'failed' : 'success';
+  const isSuspicious = faker.datatype.boolean({ probability: 0.05 });
+  return {
+    performedBy: {
+      userId:   user._id,
+      email:    user.email,
+      fullName: `${user.firstName} ${user.lastName}`
+    },
+    action,
+    resource,
+    permission: `${resource}:${action.toLowerCase()}`,
+    request: { method: action, url: `/api/v1/${resource}`, body: {}, params: {}, query: {} },
+    response: { statusCode, success: statusCode < 400 },
+    device: {
+      userAgent: faker.internet.userAgent(),
+      browser:   { name: faker.helpers.arrayElement(['Chrome', 'Firefox', 'Safari', 'Edge']), version: faker.system.semver() },
+      os:        { name: faker.helpers.arrayElement(['Windows', 'macOS', 'Linux', 'Android', 'iOS']), version: faker.system.semver() },
+      device:    { type: faker.helpers.arrayElement(['desktop', 'mobile', 'tablet']), vendor: faker.helpers.arrayElement(['Apple', 'Samsung', 'Google', 'Dell', 'HP']), model: faker.helpers.arrayElement(['iPhone', 'Galaxy S23', 'MacBook', 'Latitude']) }
+    },
+    location: {
+      ip: faker.helpers.arrayElement(NIGERIAN_IPS),
+      country: 'NG',
+      region: faker.helpers.arrayElement(NIGERIAN_STATES),
+      city: faker.helpers.arrayElement(['Lagos', 'Abuja', 'Port Harcourt', 'Kano', 'Ibadan']),
+      timezone: 'Africa/Lagos',
+      ll: [faker.location.latitude({ min: 4, max: 14 }), faker.location.longitude({ min: 3, max: 15 })]
+    },
+    status:            auditStatus,
+    isSuspicious,
+    suspiciousReasons: isSuspicious ? [faker.helpers.arrayElement(SUSPICIOUS_REASONS)] : [],
+    createdAt:         faker.date.between({ from: '2024-01-01', to: '2024-12-31' })
+  };
+}
 
 async function seedAuditLogs() {
   console.log('\n Seeding audit logs...');
 
   const existingCount = await AuditLog.countDocuments();
-  if (existingCount >= 1500) {
+  if (existingCount >= SEED_AUDIT_LOGS) {
     console.log('  Audit logs already seeded — skipping');
     return;
   }
 
-  const users = await User.find({ isActive: true }).limit(50).lean();
+  const users = await User.find({ isActive: true }).limit(100).lean();
   if (!users.length) return;
 
-  const RESOURCES = ['employees', 'departments', 'payroll', 'leave', 'users', 'roles'];
-  const ACTIONS   = ['POST', 'PATCH', 'DELETE', 'GET'];
-  const NIGERIAN_IPS = [
-    '197.210.84.1', '105.112.0.1', '41.58.0.1',
-    '197.255.0.1',  '196.216.0.1', '154.120.0.1'
-  ];
+  const toCreate = SEED_AUDIT_LOGS - existingCount;
+  const auditBatchSize = Math.min(SEED_BULK_BATCH_SIZE, 20000);
+  let created = 0;
 
-  const auditBatch = [];
-
-  for (let i = 0; i < 2000; i++) {
-    const user     = faker.helpers.arrayElement(users);
-    const resource = faker.helpers.arrayElement(RESOURCES);
-    const action   = faker.helpers.arrayElement(ACTIONS);
-
-    const statusCode = faker.helpers.weightedArrayElement([
-      { weight: 70, value: 200 },
-      { weight: 15, value: 400 },
-      { weight: 10, value: 403 },
-      { weight: 5,  value: 500 }
-    ]);
-
-    const auditStatus = statusCode === 403 ? 'forbidden'
-      : statusCode >= 400 ? 'failed' : 'success';
-
-    const isSuspicious = faker.datatype.boolean({ probability: 0.05 });
-
-    auditBatch.push({
-      performedBy: {
-        userId:   user._id,
-        email:    user.email,
-        fullName: `${user.firstName} ${user.lastName}`
-      },
-      action,
-      resource,
-      permission: `${resource}:${action.toLowerCase()}`,
-      request: {
-        method: action,
-        url:    `/api/v1/${resource}`,
-        body:   {},
-        params: {},
-        query:  {}
-      },
-      response: {
-        statusCode,
-        success: statusCode < 400
-      },
-      device: {
-        userAgent: faker.internet.userAgent(),
-        browser: {
-          name:    faker.helpers.arrayElement(['Chrome', 'Firefox', 'Safari', 'Edge']),
-          version: faker.system.semver()
-        },
-        os: {
-          name:    faker.helpers.arrayElement(['Windows', 'macOS', 'Linux', 'Android', 'iOS']),
-          version: faker.system.semver()
-        },
-        device: {
-          type:   faker.helpers.arrayElement(['desktop', 'mobile', 'tablet']),
-          vendor: faker.helpers.arrayElement(['Apple', 'Samsung', 'Google', 'Dell', 'HP']),
-          model:  faker.helpers.arrayElement(['iPhone', 'Galaxy S23', 'MacBook', 'Latitude'])
-        }
-      },
-      location: {
-        ip:      faker.helpers.arrayElement(NIGERIAN_IPS),
-        country: 'NG',
-        region:  faker.helpers.arrayElement(NIGERIAN_STATES),
-        city:    faker.helpers.arrayElement(['Lagos', 'Abuja', 'Port Harcourt', 'Kano', 'Ibadan']),
-        timezone:'Africa/Lagos',
-        ll:      [faker.location.latitude({ min: 4, max: 14 }), faker.location.longitude({ min: 3, max: 15 })]
-      },
-      status:            auditStatus,
-      isSuspicious,
-      suspiciousReasons: isSuspicious ? [
-        faker.helpers.arrayElement([
-          'Repeated forbidden attempts — 6 access denied events in the last 15 minutes',
-          'High mutation volume — 23 mutating requests in the last 5 minutes',
-          'Sensitive resource "payroll" accessed at odd hours (23:00)',
-          'Bulk deletions detected — 7 delete operations in the last 10 minutes'
-        ])
-      ] : [],
-      createdAt: faker.date.between({ from: '2024-01-01', to: '2024-12-31' })
-    });
+  for (let i = 0; i < toCreate; i += auditBatchSize) {
+    const batchSize = Math.min(auditBatchSize, toCreate - i);
+    const auditBatch = Array.from({ length: batchSize }, () => buildAuditLogDoc(users));
+    await batchInsert(AuditLog, auditBatch);
+    created += batchSize;
+    process.stdout.write(`\r  → Audit logs: ${created}/${toCreate}`);
   }
-
-  await batchInsert(AuditLog, auditBatch);
-  console.log(`  2000 audit logs created`);
+  console.log();
 }
 
 // ─── Helper: get permission names from IDs ────────────────────────────────────
@@ -1037,6 +972,7 @@ async function runDevSeeder() {
   }
   
   console.log('Starting dev seeder...\n');
+  console.log(`Scale: SEED_EMPLOYEES=${SEED_EMPLOYEES}  SEED_AUDIT_LOGS=${SEED_AUDIT_LOGS}  BATCH_SIZE=${SEED_BULK_BATCH_SIZE}`);
   console.log('Mode: Skip existing — only adding missing records\n');
 
   const start = Date.now();

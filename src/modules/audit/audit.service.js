@@ -1,3 +1,4 @@
+const { paginate, paginationMeta } = require("../../utils/paginate");
 const AuditLog = require("./auditLog.model");
 const suspiciousActivityService = require("./suspiciousActivity.service");
 
@@ -82,77 +83,56 @@ const auditService = {
   },
 
   async getLogs(query = {}) {
-    const {
-      page = 1,
-      limit = 20,
-      userId,
-      resource,
-      status,
-      country,
-      ip,
-      startDate,
-      endDate,
-    } = query;
+    const { page, limit, skip } = paginate(query, 50);
 
     const filter = {};
+    if (query.userId) filter["performedBy.userId"] = query.userId;
+    if (query.resource) filter.resource = query.resource;
+    if (query.status) filter.status = query.status;
+    if (query.country) filter["location.country"] = query.country;
+    if (query.ip) filter["location.ip"] = query.ip;
 
-    if (userId) filter["performedBy.userId"] = userId;
-    if (resource) filter.resource = resource;
-    if (status) filter.status = status;
-    if (country) filter["location.country"] = country;
-    if (ip) filter["location.ip"] = ip;
-
-    if (startDate || endDate) {
+    if (query.startDate || query.endDate) {
       filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
+      if (query.startDate) filter.createdAt.$gte = new Date(query.startDate);
+      if (query.endDate) filter.createdAt.$lte = new Date(query.endDate);
     }
 
-    const total = await AuditLog.countDocuments(filter);
-    const logs = await AuditLog.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const [total, logs] = await Promise.all([
+      AuditLog.countDocuments(filter),
+      AuditLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
-    return {
-      logs,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / limit),
-      },
-    };
-  },
-
-  async getUserActivity(userId, query = {}) {
-    return auditService.getLogs({ ...query, userId });
-  },
-
-  async getResourceActivity(resource, query = {}) {
-    return auditService.getLogs({ ...query, resource });
+    return { logs, pagination: paginationMeta(total, page, limit) };
   },
 
   async getSuspiciousActivity(query = {}) {
-    const { page = 1, limit = 20 } = query;
+    const { page, limit, skip } = paginate(query, 50);
 
     const filter = { isSuspicious: true };
 
-    const total = await AuditLog.countDocuments(filter);
-    const logs = await AuditLog.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const [total, logs] = await Promise.all([
+      AuditLog.countDocuments(filter),
+      AuditLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
-    return {
-      logs,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / limit),
-      },
-    };
+    return { logs, pagination: paginationMeta(total, page, limit) };
+  },
+
+  async getUserActivity(userId, query = {}) {
+    return this.getLogs({ ...query, userId });
+  },
+
+  async getResourceActivity(resource, query = {}) {
+    return this.getLogs({ ...query, resource });
   },
 };
 

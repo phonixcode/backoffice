@@ -30,4 +30,7 @@ const resourceSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+resourceSchema.index({ isActive: 1 });
+resourceSchema.index({ isSystem: 1 });
+
 module.exports = mongoose.model("Resource", resourceSchema);

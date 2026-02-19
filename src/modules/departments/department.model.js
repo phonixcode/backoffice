@@ -30,4 +30,8 @@ const departmentSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+departmentSchema.index({ isActive: 1 });
+departmentSchema.index({ head: 1 });
+departmentSchema.index({ parentDepartment: 1 });
+
 module.exports = mongoose.model('Department', departmentSchema);

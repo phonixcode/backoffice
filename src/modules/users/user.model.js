@@ -63,5 +63,8 @@ userSchema.methods.getFullName = function () {
 
 // userSchema.index({ email: 1 });
 // userSchema.index({ permissionsCache: 1 });
-
+userSchema.index({ isActive: 1 });
+userSchema.index({ roles: 1 });
+userSchema.index({ createdAt: -1 });
+userSchema.index({ isActive: 1, createdAt: -1 });
 module.exports = mongoose.model('User', userSchema);

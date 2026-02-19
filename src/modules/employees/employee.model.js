@@ -94,4 +94,11 @@ employeeSchema.pre("save", async function (next) {
 employeeSchema.index({ department: 1 });
 // employeeSchema.index({ employeeId: 1 });
 
+employeeSchema.index({ employmentStatus: 1 });
+employeeSchema.index({ isActive: 1 });
+employeeSchema.index({ createdAt: -1 });
+employeeSchema.index({ department: 1, employmentStatus: 1 });
+employeeSchema.index({ department: 1, employmentStatus: 1, employmentType: 1 });
+employeeSchema.index({ manager: 1 });
+
 module.exports = mongoose.model("Employee", employeeSchema);

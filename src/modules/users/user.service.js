@@ -1,57 +1,45 @@
-const User = require('./user.model');
-const Role = require('../roles/role.model');
-const Permission = require('../permissions/permission.model');
+const User = require("./user.model");
+const Role = require("../roles/role.model");
+const Permission = require("../permissions/permission.model");
+const { paginate, paginationMeta } = require("../../utils/paginate");
 
 const userService = {
   async getAllUsers(query = {}) {
-    const {
-      page = 1,
-      limit = 10,
-      search = '',
-      role,
-      isActive
-    } = query;
+    const { page, limit, skip } = paginate(query, 100);
 
     const filter = {};
-
-    // search by name or email
-    if (search) {
+    if (query.search) {
       filter.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName:  { $regex: search, $options: 'i' } },
-        { email:     { $regex: search, $options: 'i' } }
+        { firstName: { $regex: query.search, $options: "i" } },
+        { lastName: { $regex: query.search, $options: "i" } },
+        { email: { $regex: query.search, $options: "i" } },
       ];
     }
+    if (query.role) filter.roles = query.role;
+    if (query.isActive !== undefined)
+      filter.isActive = query.isActive === "true";
 
-    if (role) filter.roles = role;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    const [total, users] = await Promise.all([
+      User.countDocuments(filter),
+      User.find(filter)
+        .populate("roles", "name displayName")
+        .select("-permissionsCache -directPermissions")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
-    const total = await User.countDocuments(filter);
-    const users = await User.find(filter)
-      .populate('roles', 'name displayName')
-      .select('-permissionsCache -directPermissions')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
-
-    return {
-      users,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / limit)
-      }
-    };
+    return { users, pagination: paginationMeta(total, page, limit) };
   },
 
   async getUser(userId) {
     const user = await User.findById(userId)
-      .populate('roles', 'name displayName description')
-      .populate('directPermissions', 'name action resourceName type');
+      .populate("roles", "name displayName description")
+      .populate("directPermissions", "name action resourceName type");
 
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
@@ -64,7 +52,7 @@ const userService = {
 
     const existing = await User.findOne({ email });
     if (existing) {
-      const error = new Error('Email already in use');
+      const error = new Error("Email already in use");
       error.statusCode = 409;
       throw error;
     }
@@ -72,10 +60,10 @@ const userService = {
     if (roles.length) {
       const found = await Role.countDocuments({
         _id: { $in: roles },
-        isActive: true
+        isActive: true,
       });
       if (found !== roles.length) {
-        const error = new Error('One or more roles are invalid');
+        const error = new Error("One or more roles are invalid");
         error.statusCode = 400;
         throw error;
       }
@@ -84,7 +72,10 @@ const userService = {
     // if no roles provided pick up default role
     let assignedRoles = roles;
     if (!assignedRoles.length) {
-      const defaultRole = await Role.findOne({ isDefault: true, isActive: true });
+      const defaultRole = await Role.findOne({
+        isDefault: true,
+        isActive: true,
+      });
       if (defaultRole) assignedRoles = [defaultRole._id];
     }
 
@@ -93,7 +84,7 @@ const userService = {
       lastName,
       email,
       password,
-      roles: assignedRoles
+      roles: assignedRoles,
     });
 
     await userService.rebuildUserCache(user);
@@ -104,7 +95,7 @@ const userService = {
   async updateUser(userId, data) {
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
@@ -113,14 +104,14 @@ const userService = {
     if (data.email && data.email !== user.email) {
       const exists = await User.findOne({ email: data.email });
       if (exists) {
-        const error = new Error('Email already in use');
+        const error = new Error("Email already in use");
         error.statusCode = 409;
         throw error;
       }
     }
 
-    const allowedFields = ['firstName', 'lastName', 'email'];
-    allowedFields.forEach(field => {
+    const allowedFields = ["firstName", "lastName", "email"];
+    allowedFields.forEach((field) => {
       if (data[field] !== undefined) user[field] = data[field];
     });
 
@@ -131,17 +122,17 @@ const userService = {
   async assignRoles(userId, roleIds) {
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
 
     const found = await Role.countDocuments({
       _id: { $in: roleIds },
-      isActive: true
+      isActive: true,
     });
     if (found !== roleIds.length) {
-      const error = new Error('One or more roles are invalid');
+      const error = new Error("One or more roles are invalid");
       error.statusCode = 400;
       throw error;
     }
@@ -157,23 +148,23 @@ const userService = {
   async addDirectPermissions(userId, permissionIds) {
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
 
     const found = await Permission.countDocuments({
       _id: { $in: permissionIds },
-      isActive: true
+      isActive: true,
     });
     if (found !== permissionIds.length) {
-      const error = new Error('One or more permissions are invalid');
+      const error = new Error("One or more permissions are invalid");
       error.statusCode = 400;
       throw error;
     }
 
     // merge with existing direct permissions — no duplicates
-    const existing = user.directPermissions.map(p => p.toString());
+    const existing = user.directPermissions.map((p) => p.toString());
     const merged = [...new Set([...existing, ...permissionIds])];
     user.directPermissions = merged;
     await user.save();
@@ -186,13 +177,13 @@ const userService = {
   async removeDirectPermission(userId, permissionId) {
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
 
     user.directPermissions = user.directPermissions.filter(
-      p => p.toString() !== permissionId
+      (p) => p.toString() !== permissionId,
     );
     await user.save();
 
@@ -203,7 +194,7 @@ const userService = {
   async toggleUserStatus(userId) {
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
@@ -213,21 +204,21 @@ const userService = {
 
     return {
       isActive: user.isActive,
-      message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`
+      message: `User ${user.isActive ? "activated" : "deactivated"} successfully`,
     };
   },
 
   async changePassword(userId, currentPassword, newPassword) {
-    const user = await User.findById(userId).select('+password');
+    const user = await User.findById(userId).select("+password");
     if (!user) {
-      const error = new Error('User not found');
+      const error = new Error("User not found");
       error.statusCode = 404;
       throw error;
     }
 
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
-      const error = new Error('Current password is incorrect');
+      const error = new Error("Current password is incorrect");
       error.statusCode = 400;
       throw error;
     }
@@ -242,25 +233,25 @@ const userService = {
   async rebuildUserCache(user) {
     const roles = await Role.find({
       _id: { $in: user.roles },
-      isActive: true
+      isActive: true,
     }).populate({
-      path: 'permissions',
-      match: { isActive: true }
+      path: "permissions",
+      match: { isActive: true },
     });
 
-    const fromRoles = roles.flatMap(r => r.permissions.map(p => p.name));
+    const fromRoles = roles.flatMap((r) => r.permissions.map((p) => p.name));
 
     const directPerms = await Permission.find({
       _id: { $in: user.directPermissions },
-      isActive: true
+      isActive: true,
     });
-    const fromDirect = directPerms.map(p => p.name);
+    const fromDirect = directPerms.map((p) => p.name);
 
     user.permissionsCache = [...new Set([...fromRoles, ...fromDirect])];
     await user.save();
 
     return user.permissionsCache;
-  }
+  },
 };
 
 module.exports = userService;

@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
-const connectDB = require('./db');
-const User = require('../modules/users/user.model');
-const Role = require('../modules/roles/role.model');
-const Resource = require('../modules/resources/resource.model');
-const Permission = require('../modules/permissions/permission.model');
+const connectDB = require('../db');
+const User = require('../../modules/users/user.model');
+const Role = require('../../modules/roles/role.model');
+const Resource = require('../../modules/resources/resource.model');
+const Permission = require('../../modules/permissions/permission.model');
 
 const DEFAULT_ACTIONS = ['create', 'read', 'update', 'delete', 'list'];
 
