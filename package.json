@@ -7,7 +7,9 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "generate:secret": "node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\"",
-    "seed": "node src/config/seeder.js"
+    "seed": "node src/config/seeder.js",
+    "seed:dev": "node src/config/devSeeder.js",
+    "migrate": "node src/migrations/index.js"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +30,7 @@
     "ua-parser-js": "^2.0.9"
   },
   "devDependencies": {
+    "@faker-js/faker": "^9.9.0",
     "nodemon": "^3.1.11"
   }
 }

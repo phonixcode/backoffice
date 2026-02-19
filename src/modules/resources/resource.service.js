@@ -125,6 +125,12 @@ const resourceService = {
       throw error;
     }
 
+    if (resource.isSystem) {
+      const error = new Error(`"${resource.name}" is a system resource and cannot be deleted`);
+      error.statusCode = 403;
+      throw error;
+    }
+
     const permissions = await Permission.find({ resource: resourceId });
     const permissionIds = permissions.map((p) => p._id);
 
