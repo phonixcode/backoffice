@@ -1,6 +1,7 @@
 const Payroll = require("./payroll.model");
 const Employee = require("../employees/employee.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
+const notificationService = require("../notification/notification.service");
 
 const payrollService = {
   async getAllPayrolls(query = {}) {
@@ -70,7 +71,7 @@ const payrollService = {
     const grossPay = basicSalary + totalAllowances;
     const netPay = grossPay - totalDeductions;
 
-    return Payroll.create({
+    const payroll = await Payroll.create({
       employee: employeeId,
       period: { month, year },
       basicSalary,
@@ -82,6 +83,17 @@ const payrollService = {
       status: "pending_approval",
       processedBy,
     });
+
+    await notificationService.send({
+      title:   'Payroll Processed',
+      message: `Payroll for ${period.month}/${period.year} has been processed and is pending approval.`,
+      type:    'info',
+      resource:   'payroll',
+      resourceId: payroll._id,
+      role:       'finance_manager'
+    });
+
+    return payroll;
   },
 
   async approvePayroll(payrollId, approvedBy) {
@@ -104,6 +116,15 @@ const payrollService = {
     payroll.approvedBy = approvedBy;
     await payroll.save();
 
+    await notificationService.send({
+      title:   'Payroll Approved',
+      message: `Payroll for ${period.month}/${period.year} has been approved.`,
+      type:    'success',
+      resource:   'payroll',
+      resourceId: payroll._id,
+      role:       'finance_manager'
+    });
+
     return payrollService.getPayroll(payrollId);
   },
 
@@ -124,6 +145,15 @@ const payrollService = {
     payroll.status = "paid";
     payroll.paidAt = new Date();
     await payroll.save();
+
+    await notificationService.send({
+      title:     'Salary Payment',
+      message:   `Your salary for ${period.month}/${period.year} has been paid. Check your account.`,
+      type:      'success',
+      resource:  'payroll',
+      broadcast: false,
+      userId:    payroll.employee.user
+    });
 
     return payrollService.getPayroll(payrollId);
   },

@@ -1,6 +1,7 @@
 const Leave = require("./leave.model");
 const Employee = require("../employees/employee.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
+const notificationService = require("../notification/notification.service");
 
 const leaveService = {
   async getAllLeaves(query = {}) {
@@ -64,13 +65,25 @@ const leaveService = {
       throw error;
     }
 
-    return Leave.create({
+    const leave = await Leave.create({
       employee: employee._id,
       type,
       startDate,
       endDate,
       reason,
     });
+
+    await notificationService.send({
+      title:       'New Leave Request',
+      message:     `A new ${leave.type} leave request requires your approval.`,
+      type:        'warning',
+      triggeredBy: leave.employee.user,
+      resource:    'leave',
+      resourceId:  leave._id,
+      role:        'hr_manager'
+    });
+
+    return leave;
   },
 
   async approveLeave(leaveId, reviewedBy, reviewNote) {
@@ -94,6 +107,16 @@ const leaveService = {
     leave.reviewNote = reviewNote;
     leave.reviewedAt = new Date();
     await leave.save();
+
+    await notificationService.send({
+      title:       'Leave Request Approved',
+      message:     `Your ${leave.type} leave request from ${leave.startDate.toDateString()} to ${leave.endDate.toDateString()} has been approved.`,
+      type:        'success',
+      triggeredBy: reviewedBy,
+      resource:    'leave',
+      resourceId:  leave._id,
+      userId:      leave.employee.user
+    });
 
     return leaveService.getLeave(leaveId);
   },
@@ -127,6 +150,16 @@ const leaveService = {
     leave.reviewNote = reviewNote;
     leave.reviewedAt = new Date();
     await leave.save();
+
+    await notificationService.send({
+      title:       'Leave Request Rejected',
+      message:     `Your ${leave.type} leave request has been rejected. Reason: ${reviewNote}`,
+      type:        'error',
+      triggeredBy: reviewedBy,
+      resource:    'leave',
+      resourceId:  leave._id,
+      userId:      leave.employee.user
+    });
 
     return leaveService.getLeave(leaveId);
   },

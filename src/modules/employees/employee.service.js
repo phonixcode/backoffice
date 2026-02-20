@@ -1,6 +1,7 @@
 const Employee = require("./employee.model");
 const User = require("../users/user.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
+const notificationService = require("../notification/notification.service");
 
 const employeeService = {
   async getAllEmployees(query = {}) {
@@ -116,6 +117,15 @@ const employeeService = {
     await employee.save();
 
     await User.findByIdAndUpdate(employee.user, { isActive: false });
+
+    await notificationService.send({
+      title:   'Employee Terminated',
+      message: `${employee.user.firstName} ${employee.user.lastName} has been terminated.`,
+      type:    'warning',
+      resource:   'employees',
+      resourceId: employee._id,
+      role:       'hr_manager'
+    });
 
     return employeeService.getEmployee(employeeId);
   },
