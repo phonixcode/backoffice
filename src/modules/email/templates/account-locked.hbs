@@ -1,0 +1,33 @@
+<p class="greeting">Your account has been locked</p>
+<p class="intro">
+  Hello {{firstName}}, your BackOffice NG account has been temporarily locked
+  after <strong>{{attempts}} failed login attempts</strong>.
+</p>
+
+<div class="info-card">
+  <div class="info-row">
+    <span class="info-label">Account</span>
+    <span class="info-value">{{email}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Locked at</span>
+    <span class="info-value">{{lockedAt}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Unlocks at</span>
+    <span class="info-value">{{unlocksAt}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Last attempt IP</span>
+    <span class="info-value">{{ip}}</span>
+  </div>
+</div>
+
+<div class="">
+  🚨 If this was not you, your account credentials may be compromised.
+  Contact your administrator immediately.
+</div>
+
+<div class="btn-wrap">
+  <a href="{{forgotPasswordUrl}}" class="btn danger">Reset My Password</a>
+</div>

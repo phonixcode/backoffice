@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      color: #1a1a1a;
+      padding: 40px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #1d4ed8;
+      margin-bottom: 24px;
+    }
+    .company-name { font-size: 22px; font-weight: 700; color: #1d4ed8; }
+    .report-title { text-align: right; }
+    .report-title h2 { font-size: 16px; font-weight: 600; }
+    .report-title p  { font-size: 12px; color: #6b7280; margin-top: 4px; }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+    .card-label { font-size: 11px; color: #6b7280; margin-bottom: 6px; }
+    .card-value { font-size: 16px; font-weight: 700; color: #1d4ed8; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th {
+      background: #1d4ed8;
+      color: #fff;
+      padding: 9px 10px;
+      text-align: left;
+      font-size: 11px;
+    }
+    td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .right { text-align: right; }
+
+    .footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .footer p { font-size: 10px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="company-name">BackOffice NG</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px">Payroll Report</div>
+    </div>
+    <div class="report-title">
+      <h2>Payroll Report — {{period}}</h2>
+      <p>Generated: {{generatedAt}}</p>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-cards">
+    <div class="card">
+      <div class="card-label">Total Employees</div>
+      <div class="card-value">{{totalEmployees}}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Gross</div>
+      <div class="card-value">{{totalGross}}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Deductions</div>
+      <div class="card-value">{{totalDeductions}}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Net Pay</div>
+      <div class="card-value">{{totalNet}}</div>
+    </div>
+  </div>
+
+  <!-- Payroll Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>Employee ID</th>
+        <th>Name</th>
+        <th>Department</th>
+        <th>Job Title</th>
+        <th class="right">Basic (₦)</th>
+        <th class="right">Gross (₦)</th>
+        <th class="right">Deductions (₦)</th>
+        <th class="right">Net Pay (₦)</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each records}}
+      <tr>
+        <td>{{this.employeeId}}</td>
+        <td>{{this.fullName}}</td>
+        <td>{{this.department}}</td>
+        <td>{{this.jobTitle}}</td>
+        <td class="right">{{this.basicSalary}}</td>
+        <td class="right">{{this.grossPay}}</td>
+        <td class="right">{{this.totalDeductions}}</td>
+        <td class="right">{{this.netPay}}</td>
+        <td>{{this.status}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>BackOffice NG · support@backoffice.ng</p>
+    <p>CONFIDENTIAL — For internal use only</p>
+  </div>
+
+</body>
+</html>

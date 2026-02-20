@@ -16,21 +16,27 @@
   "description": "",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "bull": "^4.16.5",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "crypto": "^1.0.1",
+    "csv-stringify": "^6.6.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "geoip-lite": "^1.4.10",
+    "handlebars": "^4.7.8",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
+    "ioredis": "^5.9.3",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.23.0",
     "morgan": "^1.10.1",
     "nodemailer": "^8.0.1",
-    "ua-parser-js": "^2.0.9"
+    "puppeteer": "^24.37.5",
+    "ua-parser-js": "^2.0.9",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",

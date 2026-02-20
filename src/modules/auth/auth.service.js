@@ -1,11 +1,13 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { v4: uuidv4 } = require("uuid");
 const User = require("../users/user.model");
 const RefreshToken = require("./refreshToken.model");
 const env = require("../../config/env");
 const Role = require("../roles/role.model");
 const Permission = require("../permissions/permission.model");
 const { sendMail } = require("../../middleware/mailer");
+const { emailQueue } = require("../../jobs/queue");
 
 const authService = {
   generateAccessToken(user) {
@@ -96,6 +98,21 @@ const authService = {
           ? `Invalid email or password — ${attemptsLeft} attempt(s) remaining`
           : "Account locked due to too many failed attempts. Try again in 30 minutes",
       );
+
+      await emailQueue.add(
+        {
+          type: "account-locked",
+          data: {
+            to: user.email,
+            firstName: user.firstName,
+            email: user.email,
+            attempts: 5,
+            ip: deviceInfo.ip || "",
+          },
+        },
+        { jobId: uuidv4() },
+      );
+
       error.statusCode = 401;
       throw error;
     }
@@ -132,28 +149,20 @@ const authService = {
     // send reset email
     const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
 
-    await sendMail({
-      to: user.email,
-      subject: "Password Reset Request — BackOffice NG",
-      html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Password Reset Request</h2>
-        <p>Hello ${user.firstName},</p>
-        <p>You requested a password reset. Click the button below to reset your password.</p>
-        <p>This link expires in <strong>30 minutes</strong>.</p>
-        <a href="${resetUrl}"
-           style="display:inline-block; padding:12px 24px; background:#2563eb;
-                  color:#fff; text-decoration:none; border-radius:6px; margin:16px 0;">
-          Reset Password
-        </a>
-        <p>If you did not request this, please ignore this email. Your password will remain unchanged.</p>
-        <p>For security, never share this link with anyone.</p>
-      </div>
-    `,
-    });
+    await emailQueue.add(
+      {
+        type: "forgot-password",
+        data: {
+          to: user.email,
+          firstName: user.firstName,
+          resetUrl,
+        },
+      },
+      { jobId: uuidv4() },
+    );
   },
 
-  async resetPassword(rawToken, newPassword) {
+  async resetPassword(rawToken, newPassword, ip = "") {
     const hashedToken = crypto
       .createHash("sha256")
       .update(rawToken)
@@ -179,6 +188,19 @@ const authService = {
     await user.save();
 
     await RefreshToken.deleteMany({ userId: user._id });
+
+    await emailQueue.add(
+      {
+        type: "password-reset-success",
+        data: {
+          to: user.email,
+          firstName: user.firstName,
+          email: user.email,
+          ip,
+        },
+      },
+      { jobId: uuidv4() },
+    );
   },
 
   async refresh(token) {

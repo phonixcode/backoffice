@@ -1,6 +1,9 @@
 const Leave = require("./leave.model");
 const Employee = require("../employees/employee.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
+const notificationService = require("../notification/notification.service");
+const { emailQueue } = require('../../jobs/queue');
+const { v4: uuidv4 } = require('uuid');
 
 const leaveService = {
   async getAllLeaves(query = {}) {
@@ -64,13 +67,53 @@ const leaveService = {
       throw error;
     }
 
-    return Leave.create({
+    const leave = await Leave.create({
       employee: employee._id,
       type,
       startDate,
       endDate,
       reason,
     });
+
+    await notificationService.send({
+      title: "New Leave Request",
+      message: `A new ${leave.type} leave request requires your approval.`,
+      type: "warning",
+      triggeredBy: leave.employee.user,
+      resource: "leave",
+      resourceId: leave._id,
+      role: "hr_manager",
+    });
+
+    const hrManagers = await User.find({
+      roles: { $in: [hrManagerRole._id] },
+      isActive: true,
+    })
+      .select("email firstName")
+      .lean();
+
+    hrManagers.forEach((manager) => {
+      emailQueue.add(
+        {
+          type: "leave-request",
+          data: {
+            to: manager.email,
+            recipientName: manager.firstName,
+            employeeName: `${employeeUser.firstName} ${employeeUser.lastName}`,
+            department: department.displayName,
+            leaveType: leave.type,
+            startDate: leave.startDate,
+            endDate: leave.endDate,
+            days: leave.days,
+            reason: leave.reason,
+            reviewUrl: `${process.env.CLIENT_URL}/leave/${leave._id}`,
+          },
+        },
+        { jobId: uuidv4() },
+      );
+    });
+
+    return leave;
   },
 
   async approveLeave(leaveId, reviewedBy, reviewNote) {
@@ -94,6 +137,32 @@ const leaveService = {
     leave.reviewNote = reviewNote;
     leave.reviewedAt = new Date();
     await leave.save();
+
+    await notificationService.send({
+      title: "Leave Request Approved",
+      message: `Your ${leave.type} leave request from ${leave.startDate.toDateString()} to ${leave.endDate.toDateString()} has been approved.`,
+      type: "success",
+      triggeredBy: reviewedBy,
+      resource: "leave",
+      resourceId: leave._id,
+      userId: leave.employee.user,
+    });
+
+    await emailQueue.add(
+      {
+        type: "leave-approved",
+        data: {
+          to: employeeUser.email,
+          firstName: employeeUser.firstName,
+          leaveType: leave.type,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          days: leave.days,
+          approvedBy: `${reviewer.firstName} ${reviewer.lastName}`,
+        },
+      },
+      { jobId: uuidv4() },
+    );
 
     return leaveService.getLeave(leaveId);
   },
@@ -127,6 +196,33 @@ const leaveService = {
     leave.reviewNote = reviewNote;
     leave.reviewedAt = new Date();
     await leave.save();
+
+    await notificationService.send({
+      title: "Leave Request Rejected",
+      message: `Your ${leave.type} leave request has been rejected. Reason: ${reviewNote}`,
+      type: "error",
+      triggeredBy: reviewedBy,
+      resource: "leave",
+      resourceId: leave._id,
+      userId: leave.employee.user,
+    });
+
+    await emailQueue.add(
+      {
+        type: "leave-rejected",
+        data: {
+          to: employeeUser.email,
+          firstName: employeeUser.firstName,
+          leaveType: leave.type,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          days: leave.days,
+          reviewedBy: `${reviewer.firstName} ${reviewer.lastName}`,
+          reviewNote: leave.reviewNote,
+        },
+      },
+      { jobId: uuidv4() },
+    );
 
     return leaveService.getLeave(leaveId);
   },

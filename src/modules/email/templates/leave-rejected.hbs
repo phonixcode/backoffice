@@ -1,0 +1,35 @@
+<p class="greeting">Leave Request Update</p>
+<p class="intro">
+  Hello {{firstName}}, unfortunately your leave request has not been approved
+  at this time.
+</p>
+
+<div class="info-card">
+  <div class="info-row">
+    <span class="info-label">Leave Type</span>
+    <span class="info-value">{{leaveType}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Requested Dates</span>
+    <span class="info-value">{{startDate}} — {{endDate}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Duration</span>
+    <span class="info-value">{{days}} day(s)</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Reviewed By</span>
+    <span class="info-value">{{reviewedBy}}</span>
+  </div>
+</div>
+
+{{#if reviewNote}}
+<div class="warning">
+  💬 <strong>Review note:</strong> {{reviewNote}}
+</div>
+{{/if}}
+
+<p class="note">
+  If you have questions about this decision, please speak with your line manager
+  or contact HR at <a href="mailto:hr@backoffice.ng" style="color:#3b82f6">hr@backoffice.ng</a>.
+</p>

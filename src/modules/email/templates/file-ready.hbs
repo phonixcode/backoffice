@@ -1,0 +1,40 @@
+<p class="greeting">Your {{fileType}} is Ready</p>
+<p class="intro">
+  Hello {{firstName}}, the {{fileType}} you requested has been generated
+  and is ready to download.
+</p>
+
+<div class="info-card">
+  <div class="info-row">
+    <span class="info-label">File Type</span>
+    <span class="info-value">{{fileType}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">File Name</span>
+    <span class="info-value">{{filename}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Generated At</span>
+    <span class="info-value">{{generatedAt}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Expires In</span>
+    <span class="info-value">24 hours</span>
+  </div>
+</div>
+
+<div class="alert warning">
+  ⏱ This download link expires in <strong>24 hours</strong>.
+  Please download your file before it expires.
+</div>
+
+<div class="btn-wrap">
+  <a href="{{downloadUrl}}" class="btn">Download {{fileType}}</a>
+</div>
+
+<hr class="divider">
+
+<p class="note">
+  If the button doesn't work, copy and paste this link into your browser:<br>
+  <a href="{{downloadUrl}}" style="color:#3b82f6;word-break:break-all;">{{downloadUrl}}</a>
+</p>

@@ -82,12 +82,48 @@ const employeeSchema = new mongoose.Schema(
 );
 
 // auto-generate employeeId before saving
-employeeSchema.pre("save", async function (next) {
+// employeeSchema.pre("save", async function (next) {
+//   if (!this.isNew) return next();
+
+//   const count = await mongoose.model("Employee").countDocuments();
+//   this.employeeId = `EMP${String(count + 1).padStart(4, "0")}`;
+//   next();
+// });
+
+employeeSchema.pre('save', async function (next) {
   if (!this.isNew) return next();
 
-  const count = await mongoose.model("Employee").countDocuments();
-  this.employeeId = `EMP${String(count + 1).padStart(4, "0")}`;
-  next();
+  try {
+    let employeeId;
+    let exists = true;
+    let attempts = 0;
+
+    while (exists && attempts < 5) {
+      const last = await mongoose.model('Employee')
+        .findOne({}, { employeeId: 1 })
+        .sort({ employeeId: -1 })
+        .lean();
+
+      let nextNumber = 1;
+
+      if (last?.employeeId) {
+        const currentNumber = parseInt(last.employeeId.replace('EMP', ''), 10);
+        if (!isNaN(currentNumber)) nextNumber = currentNumber + 1;
+      }
+
+      employeeId = `EMP${String(nextNumber).padStart(4, '0')}`;
+
+      // verify it doesn't already exist
+      exists = !!(await mongoose.model('Employee').findOne({ employeeId }).lean());
+      attempts++;
+    }
+
+    this.employeeId = employeeId;
+    next();
+
+  } catch (err) {
+    next(err);
+  }
 });
 
 // employeeSchema.index({ user: 1 });

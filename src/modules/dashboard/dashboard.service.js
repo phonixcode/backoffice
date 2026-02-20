@@ -7,7 +7,6 @@ const AuditLog   = require('../audit/auditLog.model');
 
 const dashboardService = {
 
-  // ── Overview ─────────────────────────────────────────────────────────────
   async getOverview() {
     const now          = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -64,7 +63,6 @@ const dashboardService = {
     };
   },
 
-  // ── HR Stats ──────────────────────────────────────────────────────────────
   async getHRStats() {
     const now          = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -172,7 +170,6 @@ const dashboardService = {
     };
   },
 
-  // ── Payroll Stats ─────────────────────────────────────────────────────────
   async getPayrollStats() {
     const now          = new Date();
     const currentMonth = now.getMonth() + 1;
@@ -311,7 +308,6 @@ const dashboardService = {
     };
   },
 
-  // ── Leave Stats ───────────────────────────────────────────────────────────
   async getLeaveStats() {
     const now          = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -436,7 +432,6 @@ const dashboardService = {
     };
   },
 
-  // ── Audit Activity Feed ───────────────────────────────────────────────────
   async getActivityFeed() {
     const now           = new Date();
     const last24Hours   = new Date(now - 24 * 60 * 60 * 1000);
