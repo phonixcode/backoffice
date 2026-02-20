@@ -8,6 +8,8 @@ const { v4: uuidv4 }      = require('uuid');
 const path                = require('path');
 const fs                  = require('fs');
 const notificationService = require('../../modules/notification/notification.service');
+const { emailQueue } = require('../queue');
+const User           = require('../../modules/users/user.model');
 
 const OUTPUT_DIR = path.join(process.cwd(), 'storage', 'csv');
 if (!fs.existsSync(OUTPUT_DIR)) {
@@ -331,6 +333,24 @@ csvQueue.process(async (job) => {
         jobId:       job.id
       }
     });
+
+    const user = await User.findById(userId).select('email firstName').lean();
+
+    if (user) {
+        await emailQueue.add(
+            {
+            type: 'file-ready',
+            data: {
+                to:          user.email,
+                firstName:   user.firstName,
+                fileType:    type === 'payslip' ? 'PDF Payslip' : `${type} Report`,
+                filename,
+                downloadUrl: `${process.env.CLIENT_URL}/download?file=${filename}`
+            }
+            },
+            { jobId: uuidv4() }
+        );
+    }
 
     console.log(`CSV job [${job.id}] completed: ${result.filename} (${result.total} records)`);
     return result;

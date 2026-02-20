@@ -2,6 +2,8 @@ const Payroll = require("./payroll.model");
 const Employee = require("../employees/employee.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
 const notificationService = require("../notification/notification.service");
+const { emailQueue } = require('../../jobs/queue');
+const { v4: uuidv4 } = require('uuid');
 
 const payrollService = {
   async getAllPayrolls(query = {}) {
@@ -85,12 +87,12 @@ const payrollService = {
     });
 
     await notificationService.send({
-      title:   'Payroll Processed',
+      title: "Payroll Processed",
       message: `Payroll for ${period.month}/${period.year} has been processed and is pending approval.`,
-      type:    'info',
-      resource:   'payroll',
+      type: "info",
+      resource: "payroll",
       resourceId: payroll._id,
-      role:       'finance_manager'
+      role: "finance_manager",
     });
 
     return payroll;
@@ -117,12 +119,12 @@ const payrollService = {
     await payroll.save();
 
     await notificationService.send({
-      title:   'Payroll Approved',
+      title: "Payroll Approved",
       message: `Payroll for ${period.month}/${period.year} has been approved.`,
-      type:    'success',
-      resource:   'payroll',
+      type: "success",
+      resource: "payroll",
       resourceId: payroll._id,
-      role:       'finance_manager'
+      role: "finance_manager",
     });
 
     return payrollService.getPayroll(payrollId);
@@ -147,13 +149,35 @@ const payrollService = {
     await payroll.save();
 
     await notificationService.send({
-      title:     'Salary Payment',
-      message:   `Your salary for ${period.month}/${period.year} has been paid. Check your account.`,
-      type:      'success',
-      resource:  'payroll',
+      title: "Salary Payment",
+      message: `Your salary for ${period.month}/${period.year} has been paid. Check your account.`,
+      type: "success",
+      resource: "payroll",
       broadcast: false,
-      userId:    payroll.employee.user
+      userId: payroll.employee.user,
     });
+
+    await emailQueue.add(
+      {
+        type: "payslip-ready",
+        data: {
+          to: employeeUser.email,
+          firstName: employeeUser.firstName,
+          employeeId: employee.employeeId,
+          period: `${payroll.period.month}/${payroll.period.year}`,
+          basicSalary: formatCurrency(payroll.basicSalary),
+          totalAllowances: formatCurrency(totalAllowances),
+          totalDeductions: formatCurrency(totalDeductions),
+          grossPay: formatCurrency(payroll.grossPay),
+          netPay: formatCurrency(payroll.netPay),
+          bankName: employee.bankDetails?.bankName,
+          accountNumber: employee.bankDetails?.accountNumber,
+          paidAt: payroll.paidAt,
+          payslipUrl: `${process.env.CLIENT_URL}/payroll/${payroll._id}`,
+        },
+      },
+      { jobId: uuidv4() },
+    );
 
     return payrollService.getPayroll(payrollId);
   },

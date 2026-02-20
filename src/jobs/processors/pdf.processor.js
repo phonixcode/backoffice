@@ -3,6 +3,9 @@ const pdfService            = require('../../modules/pdf/pdf.service');
 const path                  = require('path');
 const fs                    = require('fs');
 const notificationService   = require('../../modules/notification/notification.service');
+const { emailQueue } = require('../queue');
+const User           = require('../../modules/users/user.model');
+const { v4: uuidv4 }      = require('uuid');
 
 const OUTPUT_DIR = path.join(process.cwd(), 'storage', 'pdfs');
 if (!fs.existsSync(OUTPUT_DIR)) {
@@ -69,6 +72,24 @@ pdfQueue.process(async (job) => {
       }
     });
 
+    const user = await User.findById(userId).select('email firstName').lean();
+
+    if (user) {
+        await emailQueue.add(
+            {
+            type: 'file-ready',
+            data: {
+                to:          user.email,
+                firstName:   user.firstName,
+                fileType:    type === 'payslip' ? 'PDF Payslip' : `${type} Report`,
+                filename,
+                downloadUrl: `${process.env.CLIENT_URL}/download?file=${filename}`
+            }
+            },
+            { jobId: uuidv4() }
+        );
+    }
+
     await job.progress(100);
     console.log(`PDF job [${job.id}] completed: ${filename}`);
 
@@ -85,7 +106,7 @@ pdfQueue.process(async (job) => {
       userId
     });
 
-    throw err; // re-throw so Bull marks job as failed and retries
+    throw err;
   }
 });
 

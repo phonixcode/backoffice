@@ -73,7 +73,7 @@ const authController = {
     const { error, value } = validators.resetPassword.validate(req.body);
     if (error) return apiResponse.error(res, error.details[0].message, 400);
 
-    await authService.resetPassword(value.token, value.newPassword);
+    await authService.resetPassword(value.token, value.newPassword, req.ip);
 
     return apiResponse.success(
       res,

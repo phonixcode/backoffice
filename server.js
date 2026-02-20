@@ -8,6 +8,7 @@ const fs        = require('fs');
 // background workers
 require('./src/jobs/processors/pdf.processor');
 require('./src/jobs/processors/csv.processor');
+require('./src/jobs/processors/email.processor');
 
 const STORAGE_DIRS = [
   path.join(process.cwd(), 'storage', 'pdfs'),

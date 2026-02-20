@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{subject}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1a1a2e;
+      padding: 40px 20px;
+    }
+
+    .wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #1d4ed8;
+      border-radius: 12px 12px 0 0;
+      padding: 28px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: #93c5fd; }
+    .header-tag {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 99px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ── Body ── */
+    .body {
+      background: #ffffff;
+      padding: 40px;
+    }
+
+    .greeting {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 12px;
+    }
+
+    .intro {
+      font-size: 15px;
+      color: #475569;
+      line-height: 1.7;
+      margin-bottom: 28px;
+    }
+
+    /* ── Info card ── */
+    .info-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 14px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #64748b; }
+    .info-value { font-weight: 600; color: #0f172a; }
+
+    /* ── Alert boxes ── */
+    .alert {
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .alert.info    { background: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+    .alert.success { background: #f0fdf4; border-left: 4px solid #22c55e; color: #15803d; }
+    .alert.warning { background: #fffbeb; border-left: 4px solid #f59e0b; color: #b45309; }
+    .alert.danger  { background: #fef2f2; border-left: 4px solid #ef4444; color: #b91c1c; }
+
+    /* ── CTA Button ── */
+    .btn-wrap { text-align: center; margin: 28px 0; }
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      background: #1d4ed8;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 8px;
+      letter-spacing: 0.02em;
+    }
+    .btn.success { background: #16a34a; }
+    .btn.danger  { background: #dc2626; }
+    .btn.warning { background: #d97706; }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 28px 0;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      border-radius: 0 0 12px 12px;
+      padding: 24px 40px;
+      text-align: center;
+    }
+    .footer p {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.8;
+    }
+    .footer a { color: #3b82f6; text-decoration: none; }
+    .confidential {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">BackOffice<span>NG</span></div>
+      <div class="header-tag">{{tag}}</div>
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+      {{{content}}}
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>
+        This email was sent by <strong>BackOffice NG</strong><br>
+        <a href="mailto:support@backoffice.ng">support@backoffice.ng</a> · Lagos, Nigeria
+      </p>
+      <p>
+        If you did not expect this email please ignore it or
+        <a href="mailto:support@backoffice.ng">contact support</a>.
+      </p>
+      <span class="confidential">Confidential · Internal Use Only</span>
+    </div>
+
+  </div>
+</body>
+</html>

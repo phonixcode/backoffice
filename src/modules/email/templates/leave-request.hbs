@@ -1,0 +1,48 @@
+<p class="greeting">New Leave Request Pending Approval</p>
+<p class="intro">
+  Hello {{recipientName}}, a new leave request has been submitted and requires
+  your approval.
+</p>
+
+<div class="info-card">
+  <div class="info-row">
+    <span class="info-label">Employee</span>
+    <span class="info-value">{{employeeName}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Department</span>
+    <span class="info-value">{{department}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Leave Type</span>
+    <span class="info-value">{{leaveType}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Start Date</span>
+    <span class="info-value">{{startDate}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">End Date</span>
+    <span class="info-value">{{endDate}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Duration</span>
+    <span class="info-value">{{days}} day(s)</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Reason</span>
+    <span class="info-value">{{reason}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Submitted At</span>
+    <span class="info-value">{{submittedAt}}</span>
+  </div>
+</div>
+
+<div class="warning">
+  ⏳ This request is pending your approval. Please review it at your earliest convenience.
+</div>
+
+<div class="btn-wrap">
+  <a href="{{reviewUrl}}" class="btn">Review Request</a>
+</div>

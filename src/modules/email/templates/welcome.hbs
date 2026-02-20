@@ -1,0 +1,44 @@
+<p class="greeting">Welcome to BackOffice NG 🎉</p>
+<p class="intro">
+  Hello {{firstName}}, your employee account has been created on BackOffice NG.
+  Here are your login details — please change your password after your first login.
+</p>
+
+<div class="info-card">
+  <div class="info-row">
+    <span class="info-label">Employee ID</span>
+    <span class="info-value">{{employeeId}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Full Name</span>
+    <span class="info-value">{{fullName}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Department</span>
+    <span class="info-value">{{department}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Job Title</span>
+    <span class="info-value">{{jobTitle}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Email</span>
+    <span class="info-value">{{email}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Temporary Password</span>
+    <span class="info-value">{{tempPassword}}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Start Date</span>
+    <span class="info-value">{{startDate}}</span>
+  </div>
+</div>
+
+<div class="warning">
+  🔑 Please change your temporary password immediately after logging in.
+</div>
+
+<div class="btn-wrap">
+  <a href="{{loginUrl}}" class="btn">Login to BackOffice NG</a>
+</div>

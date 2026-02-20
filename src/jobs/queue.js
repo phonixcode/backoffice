@@ -18,5 +18,6 @@ const redisConfig = {
 
 const pdfQueue = new Bull('pdf-generation', redisConfig);
 const csvQueue = new Bull('csv-export',     redisConfig);
+const emailQueue = new Bull('email',        redisConfig);
 
-module.exports = { pdfQueue, csvQueue };
+module.exports = { pdfQueue, csvQueue, emailQueue };

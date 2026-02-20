@@ -1,7 +1,32 @@
 const Employee = require("./employee.model");
 const User = require("../users/user.model");
+const Department = require("../departments/department.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
 const notificationService = require("../notification/notification.service");
+const { emailQueue } = require("../../jobs/queue");
+const { v4: uuidv4 } = require("uuid");
+
+function generateTempPassword() {
+  const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower   = 'abcdefghjkmnpqrstuvwxyz';
+  const numbers = '23456789';
+  const special = '@#$!%*?&';
+
+  const rand = (str) => str[Math.floor(Math.random() * str.length)];
+
+  const password = [
+    rand(upper),
+    rand(upper),
+    rand(lower),
+    rand(lower),
+    rand(numbers),
+    rand(numbers),
+    rand(special),
+    rand(special)
+  ];
+
+  return password.sort(() => Math.random() - 0.5).join('');
+}
 
 const employeeService = {
   async getAllEmployees(query = {}) {
@@ -71,7 +96,34 @@ const employeeService = {
       throw error;
     }
 
-    return Employee.create({ user: userId, ...rest });
+    const department = await Department.findById(rest.department).lean();
+
+    const tempPassword = generateTempPassword();
+    user.password      = tempPassword;
+    await user.save();
+
+
+    const employee = await Employee.create({ user: userId, ...rest });
+
+    await emailQueue.add(
+      {
+        type: "welcome",
+        data: {
+          to: user.email,
+          firstName: user.firstName,
+          fullName: `${user.firstName} ${user.lastName}`,
+          employeeId: employee.employeeId,
+          department: department?.displayName || "N/A",
+          jobTitle: employee.jobTitle,
+          email: user.email,
+          tempPassword,
+          startDate: employee.startDate,
+        },
+      },
+      { jobId: uuidv4() },
+    );
+
+    return employee;
   },
 
   async updateEmployee(employeeId, data) {
@@ -116,16 +168,32 @@ const employeeService = {
     employee.isActive = false;
     await employee.save();
 
-    await User.findByIdAndUpdate(employee.user, { isActive: false });
+    const user = await User.findByIdAndUpdate(employee.user, { isActive: false });
 
     await notificationService.send({
-      title:   'Employee Terminated',
+      title: "Employee Terminated",
       message: `${employee.user.firstName} ${employee.user.lastName} has been terminated.`,
-      type:    'warning',
-      resource:   'employees',
+      type: "warning",
+      resource: "employees",
       resourceId: employee._id,
-      role:       'hr_manager'
+      role: "hr_manager",
     });
+
+    await emailQueue.add(
+      {
+        type: 'termination',
+        data: {
+          to:          user.email,
+          firstName:   user.firstName,
+          employeeId:  employee.employeeId,
+          department:  department.displayName,
+          jobTitle:    employee.jobTitle,
+          endDate:     employee.endDate,
+          reason:      terminationReason
+        }
+      },
+      { jobId: uuidv4() }
+    );
 
     return employeeService.getEmployee(employeeId);
   },
