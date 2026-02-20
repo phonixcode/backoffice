@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      color: #1a1a1a;
+      padding: 40px;
+      background: #fff;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #1d4ed8;
+      margin-bottom: 28px;
+    }
+    .company-name { font-size: 22px; font-weight: 700; color: #1d4ed8; }
+    .company-sub  { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .report-meta  { text-align: right; }
+    .report-meta h2 { font-size: 16px; font-weight: 600; }
+    .report-meta p  { font-size: 11px; color: #6b7280; margin-top: 4px; }
+
+    /* ── Summary ── */
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .card-label { font-size: 10px; color: #6b7280; margin-bottom: 4px; }
+    .card-value { font-size: 18px; font-weight: 700; color: #1d4ed8; }
+    .card.danger .card-value { color: #dc2626; }
+
+    /* ── Filter info ── */
+    .filter-info {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 11px;
+      color: #1d4ed8;
+    }
+    .filter-info span { margin-right: 20px; }
+    .filter-info strong { margin-right: 4px; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th {
+      background: #1d4ed8;
+      color: #fff;
+      padding: 8px 8px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    td {
+      padding: 7px 8px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+
+    /* status badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 99px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    .badge.success   { background: #dcfce7; color: #16a34a; }
+    .badge.failed    { background: #fee2e2; color: #dc2626; }
+    .badge.forbidden { background: #fef3c7; color: #d97706; }
+
+    /* suspicious flag */
+    .suspicious {
+      display: inline-block;
+      background: #fee2e2;
+      color: #dc2626;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    /* ── Suspicious section ── */
+    .suspicious-section { margin-bottom: 24px; }
+    .suspicious-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      color: #dc2626;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .suspicious-table th { background: #dc2626; }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer p { font-size: 10px; color: #9ca3af; }
+    .confidential { color: #ef4444; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="company-name">BackOffice NG</div>
+      <div class="company-sub">support@backoffice.ng · Lagos, Nigeria</div>
+    </div>
+    <div class="report-meta">
+      <h2>Audit Report</h2>
+      <p>Generated: {{generatedAt}}</p>
+      {{#if dateRange}}
+      <p>Period: {{dateRange}}</p>
+      {{/if}}
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-cards">
+    <div class="card">
+      <div class="card-label">Total Actions</div>
+      <div class="card-value">{{totalActions}}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Successful</div>
+      <div class="card-value">{{successCount}}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Failed</div>
+      <div class="card-value">{{failedCount}}</div>
+    </div>
+    <div class="card danger">
+      <div class="card-label">Suspicious</div>
+      <div class="card-value">{{suspiciousCount}}</div>
+    </div>
+  </div>
+
+  <!-- Active Filters -->
+  <div class="filter-info">
+    {{#if filters.resource}}
+    <span><strong>Resource:</strong>{{filters.resource}}</span>
+    {{/if}}
+    {{#if filters.status}}
+    <span><strong>Status:</strong>{{filters.status}}</span>
+    {{/if}}
+    {{#if filters.startDate}}
+    <span><strong>From:</strong>{{filters.startDate}}</span>
+    {{/if}}
+    {{#if filters.endDate}}
+    <span><strong>To:</strong>{{filters.endDate}}</span>
+    {{/if}}
+    {{#unless filters.hasAny}}
+    <span>No filters applied — showing all audit logs</span>
+    {{/unless}}
+  </div>
+
+  <!-- Suspicious Activity Section -->
+  {{#if suspiciousLogs.length}}
+  <div class="suspicious-section">
+    <h3>⚠ Suspicious Activity ({{suspiciousLogs.length}})</h3>
+    <table class="suspicious-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Performed By</th>
+          <th>Action</th>
+          <th>Resource</th>
+          <th>IP</th>
+          <th>Reasons</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each suspiciousLogs}}
+        <tr>
+          <td>{{this.createdAt}}</td>
+          <td>{{this.performedBy}}<br><span style="color:#9ca3af">{{this.email}}</span></td>
+          <td>{{this.action}}</td>
+          <td>{{this.resource}}</td>
+          <td>{{this.ip}}</td>
+          <td>{{this.reasons}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+  <!-- Full Audit Log Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Performed By</th>
+        <th>Action</th>
+        <th>Resource</th>
+        <th>Permission</th>
+        <th>Status</th>
+        <th>IP</th>
+        <th>Location</th>
+        <th>Device</th>
+        <th>Flag</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each records}}
+      <tr>
+        <td>{{this.createdAt}}</td>
+        <td>
+          {{this.performedBy}}<br>
+          <span style="color:#9ca3af">{{this.email}}</span>
+        </td>
+        <td>{{this.action}}</td>
+        <td>{{this.resource}}</td>
+        <td>{{this.permission}}</td>
+        <td>
+          <span class="badge {{this.statusClass}}">
+            {{this.status}}
+          </span>
+        </td>
+        <td>{{this.ip}}</td>
+        <td>{{this.city}}, {{this.country}}</td>
+        <td>{{this.browser}}<br>{{this.os}}</td>
+        <td>
+          {{#if this.isSuspicious}}
+          <span class="suspicious">⚠ FLAGGED</span>
+          {{/if}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>BackOffice NG · support@backoffice.ng · Lagos, Nigeria</p>
+    <p class="confidential">CONFIDENTIAL — For compliance use only</p>
+  </div>
+
+</body>
+</html>

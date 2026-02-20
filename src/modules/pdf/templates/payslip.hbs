@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      padding: 40px;
+      background: #fff;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 24px;
+      border-bottom: 3px solid #1d4ed8;
+      margin-bottom: 28px;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1d4ed8;
+    }
+    .company-sub {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .payslip-title {
+      text-align: right;
+    }
+    .payslip-title h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .payslip-title p {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .badge {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1d4ed8;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    /* ── Employee Info ── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .info-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .info-box h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .info-label { color: #6b7280; }
+    .info-value { font-weight: 600; color: #1a1a1a; }
+
+    /* ── Earnings & Deductions ── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 10px;
+    }
+    .breakdown-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      background: #1d4ed8;
+      color: #fff;
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 12px;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 12px;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .amount { text-align: right; }
+
+    /* ── Summary ── */
+    .summary {
+      background: #1d4ed8;
+      color: #fff;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .summary-item { text-align: center; }
+    .summary-label {
+      font-size: 11px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .summary-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .summary-divider {
+      width: 1px;
+      background: rgba(255,255,255,0.2);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer p { font-size: 11px; color: #9ca3af; }
+    .confidential {
+      font-size: 11px;
+      color: #ef4444;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="company-name">BackOffice NG</div>
+      <div class="company-sub">support@backoffice.ng · Lagos, Nigeria</div>
+    </div>
+    <div class="payslip-title">
+      <h2>Pay Slip</h2>
+      <p>Period: {{period}}</p>
+      <span class="badge">{{status}}</span>
+    </div>
+  </div>
+
+  <!-- Employee + Payment Info -->
+  <div class="info-grid">
+    <div class="info-box">
+      <h3>Employee Information</h3>
+      <div class="info-row">
+        <span class="info-label">Employee ID</span>
+        <span class="info-value">{{employeeId}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Full Name</span>
+        <span class="info-value">{{fullName}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Department</span>
+        <span class="info-value">{{department}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Job Title</span>
+        <span class="info-value">{{jobTitle}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Employment Type</span>
+        <span class="info-value">{{employmentType}}</span>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <h3>Payment Information</h3>
+      <div class="info-row">
+        <span class="info-label">Bank</span>
+        <span class="info-value">{{bankName}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Account Number</span>
+        <span class="info-value">{{accountNumber}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Payment Date</span>
+        <span class="info-value">{{paidAt}}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Payment Status</span>
+        <span class="info-value">{{status}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Earnings & Deductions -->
+  <div class="breakdown-grid">
+    <div>
+      <div class="section-title">Earnings</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="amount">Amount (₦)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Basic Salary</td>
+            <td class="amount">{{basicSalary}}</td>
+          </tr>
+          {{#each allowances}}
+          <tr>
+            <td>{{this.name}}</td>
+            <td class="amount">{{this.amount}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <div class="section-title">Deductions</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="amount">Amount (₦)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each deductions}}
+          <tr>
+            <td>{{this.name}}</td>
+            <td class="amount">{{this.amount}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary">
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="summary-label">Gross Pay</div>
+        <div class="summary-value">{{grossPay}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Total Deductions</div>
+        <div class="summary-value">{{totalDeductions}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Net Pay</div>
+        <div class="summary-value">{{netPay}}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Generated on {{generatedAt}} · BackOffice NG</p>
+    <p class="confidential">CONFIDENTIAL — Do not share</p>
+  </div>
+
+</body>
+</html>

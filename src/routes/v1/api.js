@@ -12,5 +12,6 @@ router.use('/audit',                require('../../modules/audit/audit.routes'))
 router.use('/dashboard',            require('../../modules/dashboard/dashboard.routes'));
 router.use('/notifications',        require('../../modules/notification/notification.routes'));
 router.use('/export',               require('../../modules/exports/export.routes'));
+router.use('/pdf',                  require('../../modules/pdf/pdf.routes'));
 
 module.exports = router;

@@ -1,0 +1,22 @@
+const pdfService   = require('./pdf.service');
+const asyncHandler = require('../../utils/asyncHandler');
+
+const pdfController = {
+  payslip: asyncHandler(async (req, res) => {
+    await pdfService.generatePayslip(res, req.params.payrollId);
+  }),
+
+  payrollReport: asyncHandler(async (req, res) => {
+    await pdfService.generatePayrollReport(res, req.query);
+  }),
+
+  leaveReport: asyncHandler(async (req, res) => {
+    await pdfService.generateLeaveReport(res, req.query);
+  }),
+
+  auditReport: asyncHandler(async (req, res) => {
+    await pdfService.generateAuditReport(res, req.query);
+  }),
+};
+
+module.exports = pdfController;
