@@ -3,9 +3,15 @@ const User = require('../modules/users/user.model');
 const env = require('../config/env');
 const apiResponse = require('../utils/apiResponse');
 
+const STREAM_PATH = '/notifications/stream';
+
 const authenticate = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const allowQueryToken = req.method === 'GET' && (req.baseUrl + req.path).endsWith(STREAM_PATH);
+    const authHeader = req.headers.authorization
+      || (allowQueryToken && req.query.token
+        ? (req.query.token.startsWith('Bearer ') ? req.query.token : `Bearer ${req.query.token}`)
+        : null);
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return apiResponse.error(res, 'No token provided or Invalid token', 401);
     }
