@@ -49,5 +49,12 @@ leaveSchema.pre('save', function (next) {
 
 leaveSchema.index({ employee: 1, status: 1 });
 leaveSchema.index({ startDate: 1, endDate: 1 });
+leaveSchema.index({ status: 1 });
+leaveSchema.index({ type: 1 });
+leaveSchema.index({ employee: 1 });
+leaveSchema.index({ reviewedBy: 1 });
+leaveSchema.index({ employee: 1, type: 1 });
+leaveSchema.index({ status: 1, createdAt: -1 });
+leaveSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Leave', leaveSchema);

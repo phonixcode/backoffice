@@ -45,4 +45,12 @@ payrollSchema.index(
   { unique: true }
 );
 
+payrollSchema.index({ status: 1 });
+payrollSchema.index({ 'period.year': 1, 'period.month': 1 });
+payrollSchema.index({ employee: 1 });
+payrollSchema.index({ processedBy: 1 });
+payrollSchema.index({ approvedBy: 1 });
+payrollSchema.index({ status: 1, 'period.year': 1, 'period.month': 1 });
+payrollSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Payroll', payrollSchema);

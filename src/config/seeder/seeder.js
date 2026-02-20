@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
-const connectDB = require('./db');
-const User = require('../modules/users/user.model');
-const Role = require('../modules/roles/role.model');
-const Resource = require('../modules/resources/resource.model');
-const Permission = require('../modules/permissions/permission.model');
+const connectDB = require('../db');
+const User = require('../../modules/users/user.model');
+const Role = require('../../modules/roles/role.model');
+const Resource = require('../../modules/resources/resource.model');
+const Permission = require('../../modules/permissions/permission.model');
 
 const DEFAULT_ACTIONS = ['create', 'read', 'update', 'delete', 'list'];
 
@@ -16,6 +16,7 @@ const INITIAL_RESOURCES = [
   { name: 'roles',       displayName: 'Roles',       description: 'Manage system roles' },
   { name: 'users',       displayName: 'Users',       description: 'Manage system users' },
   { name: 'audit',       displayName: 'Audit Logs',  description: 'View system audit logs' },
+  { name: 'dashboard',   displayName: 'Dashboard',   description: 'View dashboard statistics', isSystem: true }
 ];
 
 // custom actions on top of CRUD
