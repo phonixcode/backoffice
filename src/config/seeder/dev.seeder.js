@@ -154,6 +154,7 @@ const INITIAL_RESOURCES = [
   { name: 'roles',       displayName: 'Roles',             description: 'Manage system roles',          isSystem: true  },
   { name: 'users',       displayName: 'Users',             description: 'Manage system users',          isSystem: true  },
   { name: 'audit',       displayName: 'Audit Logs',        description: 'View system audit logs',       isSystem: true  },
+  { name: 'dashboard',   displayName: 'Dashboard',         description: 'View dashboard statistics',    isSystem: true  }
 ];
 
 const CUSTOM_ACTIONS = {

@@ -1,5 +1,4 @@
 const router  = require('express').Router();
-const getRoutes = require('../utils/getRoutes');
 
 router.get('/', (req, res) => {
   return res.json({

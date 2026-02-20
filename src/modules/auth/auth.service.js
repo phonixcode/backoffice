@@ -5,6 +5,7 @@ const RefreshToken = require("./refreshToken.model");
 const env = require("../../config/env");
 const Role = require("../roles/role.model");
 const Permission = require("../permissions/permission.model");
+const { sendMail } = require("../../middleware/mailer");
 
 const authService = {
   generateAccessToken(user) {
