@@ -5,30 +5,33 @@ const apiResponse         = require('../../utils/apiResponse');
 
 const notificationController = {
 
-  stream: (req, res) => {
-    const userId = req.user._id.toString();
+    stream: (req, res) => {
+        let userId = req.user?._id?.toString();
 
-    // set SSE headers
-    res.setHeader('Content-Type',  'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection',    'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering
-    res.flushHeaders();
+        if (!userId) {
+            return res.status(401).end();
+        }
 
-    sseManager.addClient(userId, res);
+        res.setHeader('Content-Type',      'text/event-stream');
+        res.setHeader('Cache-Control',     'no-cache');
+        res.setHeader('Connection',        'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
 
-    res.write(`event: connected\n`);
-    res.write(`data: ${JSON.stringify({ message: 'Connected to notification stream' })}\n\n`);
+        sseManager.addClient(userId, res);
 
-    notificationService.getUnreadCount(req.user).then(count => {
-      res.write(`event: unread_count\n`);
-      res.write(`data: ${JSON.stringify({ count })}\n\n`);
-    });
+        res.write(`event: connected\n`);
+        res.write(`data: ${JSON.stringify({ message: 'Connected' })}\n\n`);
 
-    req.on('close', () => {
-      sseManager.removeClient(userId, res);
-    });
-  },
+        notificationService.getUnreadCount(req.user).then(count => {
+            res.write(`event: unread_count\n`);
+            res.write(`data: ${JSON.stringify({ count })}\n\n`);
+        });
+
+        req.on('close', () => {
+            sseManager.removeClient(userId, res);
+        });
+    },
 
   getAll: asyncHandler(async (req, res) => {
     const result = await notificationService.getForUser(req.user, req.query);
