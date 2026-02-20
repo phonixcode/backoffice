@@ -1,4 +1,4 @@
-const Joi = require('joi');
+const Joi = require("joi");
 
 const validators = {
   register: Joi.object({
@@ -10,14 +10,31 @@ const validators = {
       .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
       .required()
       .messages({
-        'string.pattern.base': 'Password must contain uppercase, lowercase, number and special character'
+        "string.pattern.base":
+          "Password must contain uppercase, lowercase, number and special character",
       }),
   }),
 
   login: Joi.object({
     email: Joi.string().email().lowercase().required(),
-    password: Joi.string().required()
-  })
+    password: Joi.string().required(),
+  }),
+
+  forgotPassword: Joi.object({
+    email: Joi.string().email().lowercase().required(),
+  }),
+
+  resetPassword: Joi.object({
+    token: Joi.string().required(),
+    newPassword: Joi.string()
+      .min(8)
+      .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
+      .required()
+      .messages({
+        "string.pattern.base":
+          "Password must contain uppercase, lowercase, number and special character",
+      }),
+  }),
 };
 
 module.exports = validators;

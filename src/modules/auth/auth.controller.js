@@ -57,6 +57,30 @@ const authController = {
     });
   }),
 
+  forgotPassword: asyncHandler(async (req, res) => {
+    const { error, value } = validators.forgotPassword.validate(req.body);
+    if (error) return apiResponse.error(res, error.details[0].message, 400);
+
+    await authService.forgotPassword(value.email);
+
+    return apiResponse.success(
+      res,
+      "If that email exists in our system you will receive a reset link shortly",
+    );
+  }),
+
+  resetPassword: asyncHandler(async (req, res) => {
+    const { error, value } = validators.resetPassword.validate(req.body);
+    if (error) return apiResponse.error(res, error.details[0].message, 400);
+
+    await authService.resetPassword(value.token, value.newPassword);
+
+    return apiResponse.success(
+      res,
+      "Password reset successful. Please login with your new password.",
+    );
+  }),
+
   profile: asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id).populate({
       path: "roles",
