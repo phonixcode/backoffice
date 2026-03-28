@@ -10,6 +10,9 @@ require('../modules/payroll/payroll.model');
 require('../modules/leave/leave.model');
 require('../modules/audit/auditLog.model');
 require('../modules/auth/refreshToken.model');
+require('../modules/notifications/notification.model');
+require('../modules/attendance/attendance.model');
+require('../modules/attendance/attendance-settings.model');
 
 async function ensureCollections() {
   const conn = mongoose.connection;

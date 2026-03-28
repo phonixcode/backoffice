@@ -280,6 +280,67 @@ const exportService = {
       console.error('Export cursor error:', err);
       stringifier.end();
     });
+  },
+
+  async streamAttendance(res, query = {}) {
+    const filter = {};
+    if (query.employeeId) filter.employee = query.employeeId;
+    if (query.status)     filter.status   = query.status;
+    if (query.startDate)  filter.date     = { $gte: new Date(query.startDate) };
+    if (query.endDate) {
+      filter.date = {
+        ...filter.date,
+        $lte: new Date(query.endDate)
+      };
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="attendance_${dateStamp()}.csv"`);
+
+    const stringifier = stringify({
+      header: true,
+      columns: [
+        { key: 'employeeId', header: 'Employee ID'  },
+        { key: 'firstName',  header: 'First Name'   },
+        { key: 'lastName',   header: 'Last Name'    },
+        { key: 'department', header: 'Department'  },
+        { key: 'jobTitle',   header: 'Job Title'    },
+        { key: 'date',       header: 'Date'         },
+        { key: 'status',     header: 'Status'       },
+        { key: 'inTime',     header: 'In Time'      },
+        { key: 'outTime',    header: 'Out Time'     },
+        { key: 'duration',   header: 'Duration'     },
+        { key: 'overtime',   header: 'Overtime'     }
+      ]
+    });
+
+    stringifier.pipe(res);
+
+    const cursor = Attendance.find(filter)
+      .sort({ date: -1 })
+      .lean()
+      .cursor();
+    cursor.on('data', (a) => {
+      stringifier.write({
+        employeeId: a.employee?.employeeId                || '',
+        firstName:  a.employee?.user?.firstName           || '',
+        lastName:   a.employee?.user?.lastName            || '',
+        department: a.employee?.department?.displayName   || '',
+        jobTitle:   a.employee?.jobTitle                    || '',
+        date:       formatDate(a.date),
+        status:     a.status                             || '',
+        inTime:     formatDate(a.clockIn?.time, true)    || '',
+        outTime:    formatDate(a.clockOut?.time, true)   || '',
+        duration:   a.duration                          || 0,
+        overtime:   a.overtimeMinutes                  || 0
+      });
+    });
+
+    cursor.on('end',   () => stringifier.end());
+    cursor.on('error', (err) => {
+      console.error('Export cursor error:', err);
+      stringifier.end();
+    });
   }
 };
 

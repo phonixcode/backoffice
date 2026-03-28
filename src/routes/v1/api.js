@@ -13,5 +13,6 @@ router.use('/dashboard',            require('../../modules/dashboard/dashboard.r
 router.use('/notifications',        require('../../modules/notification/notification.routes'));
 router.use('/export',               require('../../modules/exports/export.routes'));
 router.use('/pdf',                  require('../../modules/pdf/pdf.routes'));
+router.use('/attendance',           require('../../modules/attendance/attendance.routes'));
 
 module.exports = router;

@@ -16,7 +16,8 @@ const INITIAL_RESOURCES = [
   { name: 'roles',       displayName: 'Roles',       description: 'Manage system roles' },
   { name: 'users',       displayName: 'Users',       description: 'Manage system users' },
   { name: 'audit',       displayName: 'Audit Logs',  description: 'View system audit logs' },
-  { name: 'dashboard',   displayName: 'Dashboard',   description: 'View dashboard statistics', isSystem: true }
+  { name: 'dashboard',   displayName: 'Dashboard',   description: 'View dashboard statistics', isSystem: true },
+  { name: 'attendance',  displayName: 'Attendance',  description: 'Manage employee attendance' }
 ];
 
 // custom actions on top of CRUD
@@ -32,6 +33,9 @@ const CUSTOM_ACTIONS = {
   ],
   employees: [
     { action: 'terminate', description: 'Terminate an employee' }
+  ],
+  attendance: [
+    { action: 'export',  description: 'Export employee attendance data' },
   ]
 };
 
