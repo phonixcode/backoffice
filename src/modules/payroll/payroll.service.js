@@ -1,9 +1,22 @@
+const mongoose = require("mongoose");
 const Payroll = require("./payroll.model");
 const Employee = require("../employees/employee.model");
 const { paginate, paginationMeta } = require("../../utils/paginate");
-const notificationService = require("../notification/notification.service");
-const { emailQueue } = require('../../jobs/queue');
-const { v4: uuidv4 } = require('uuid');
+const outboxService = require("../outbox/outbox.service");
+const outboxPublisher = require("../outbox/outbox.publisher");
+const {
+  formatPeriod,
+  formatCurrency,
+  maskAccountNumber,
+} = require("../../utils/formatters");
+
+function httpError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+const sum = (items) => items.reduce((total, item) => total + item.amount, 0);
 
 const payrollService = {
   async getAllPayrolls(query = {}) {
@@ -46,140 +59,209 @@ const payrollService = {
   },
 
   async processPayroll(data, processedBy) {
-    const { employeeId, month, year, allowances = [], deductions = [] } = data;
+    const { employeeId, month, year, allowances = [], deductions = [], notes } = data;
 
-    const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      const error = new Error("Employee not found");
-      error.statusCode = 404;
-      throw error;
+    const employee = await Employee.findById(employeeId)
+      .select("employeeId salary isActive employmentStatus")
+      .lean();
+    if (!employee) throw httpError("Employee not found", 404);
+    if (!employee.isActive || employee.employmentStatus !== "active") {
+      throw httpError("Payroll can only be processed for active employees", 409);
     }
 
-    // check duplicate
-    const existing = await Payroll.findOne({
+    const basicSalary = employee.salary?.amount;
+    if (!Number.isFinite(basicSalary) || basicSalary < 0) {
+      throw httpError("Employee salary must be a finite nonnegative amount", 409);
+    }
+
+    const period = { month, year };
+    const existing = await Payroll.exists({
       employee: employeeId,
       "period.month": month,
       "period.year": year,
     });
-    if (existing) {
-      const error = new Error("Payroll already processed for this period");
-      error.statusCode = 409;
-      throw error;
-    }
+    if (existing) throw httpError("Payroll already processed for this period", 409);
 
-    const basicSalary = employee.salary.amount;
-    const totalAllowances = allowances.reduce((sum, a) => sum + a.amount, 0);
-    const totalDeductions = deductions.reduce((sum, d) => sum + d.amount, 0);
+    const totalAllowances = sum(allowances);
+    const totalDeductions = sum(deductions);
     const grossPay = basicSalary + totalAllowances;
     const netPay = grossPay - totalDeductions;
+    if (netPay < 0) throw httpError("Total deductions cannot exceed gross pay", 400);
 
-    const payroll = await Payroll.create({
-      employee: employeeId,
-      period: { month, year },
-      basicSalary,
-      allowances,
-      deductions,
-      grossPay,
-      netPay,
-      currency: employee.salary.currency,
-      status: "pending_approval",
-      processedBy,
-    });
+    let payroll;
+    let deliveryIds;
+    try {
+      await mongoose.connection.transaction(async (session) => {
+        [payroll] = await Payroll.create([{
+          employee: employeeId,
+          period,
+          basicSalary,
+          allowances,
+          deductions,
+          grossPay,
+          netPay,
+          currency: employee.salary.currency,
+          status: "pending_approval",
+          processedBy,
+          notes,
+        }], { session });
 
-    await notificationService.send({
-      title: "Payroll Processed",
-      message: `Payroll for ${period.month}/${period.year} has been processed and is pending approval.`,
-      type: "info",
-      resource: "payroll",
-      resourceId: payroll._id,
-      role: "finance_manager",
-    });
+        deliveryIds = await outboxService.enqueue([{
+          deliveryId: `payroll:${payroll._id}:processed:notification:finance_manager`,
+          eventType: "payroll.processed",
+          channel: "notification",
+          aggregate: { type: "payroll", id: payroll._id },
+          payload: {
+            title: "Payroll Processed",
+            message: `Payroll for ${employee.employeeId} for ${formatPeriod(period)} has been processed and is pending approval.`,
+            type: "info",
+            triggeredBy: processedBy,
+            resource: "payroll",
+            resourceId: payroll._id,
+            role: "finance_manager",
+          },
+        }], session);
+      });
+    } catch (err) {
+      if (err.code === 11000 && err.keyPattern?.employee) {
+        throw httpError("Payroll already processed for this period", 409);
+      }
+      throw err;
+    }
+    outboxPublisher.kick();
 
-    return payroll;
+    return { payroll, deliveryIds };
   },
 
   async approvePayroll(payrollId, approvedBy) {
-    const payroll = await Payroll.findById(payrollId);
-    if (!payroll) {
-      const error = new Error("Payroll record not found");
-      error.statusCode = 404;
-      throw error;
-    }
+    let deliveryIds;
 
-    if (payroll.status !== "pending_approval") {
-      const error = new Error(
-        `Cannot approve payroll with status "${payroll.status}"`,
+    await mongoose.connection.transaction(async (session) => {
+      const payroll = await Payroll.findOneAndUpdate(
+        {
+          _id: payrollId,
+          status: "pending_approval",
+          processedBy: { $ne: approvedBy },
+        },
+        { $set: { status: "approved", approvedBy, approvedAt: new Date() } },
+        { session, new: true },
       );
-      error.statusCode = 400;
-      throw error;
-    }
 
-    payroll.status = "approved";
-    payroll.approvedBy = approvedBy;
-    await payroll.save();
+      if (!payroll) {
+        const current = await Payroll.findById(payrollId)
+          .select("status processedBy")
+          .session(session)
+          .lean();
+        if (!current) throw httpError("Payroll record not found", 404);
+        if (current.status !== "pending_approval") {
+          throw httpError(`Cannot approve payroll with status "${current.status}"`, 400);
+        }
+        throw httpError("You cannot approve payroll that you processed", 403);
+      }
 
-    await notificationService.send({
-      title: "Payroll Approved",
-      message: `Payroll for ${period.month}/${period.year} has been approved.`,
-      type: "success",
-      resource: "payroll",
-      resourceId: payroll._id,
-      role: "finance_manager",
+      deliveryIds = await outboxService.enqueue([{
+        deliveryId: `payroll:${payroll._id}:approved:notification:finance_manager`,
+        eventType: "payroll.approved",
+        channel: "notification",
+        aggregate: { type: "payroll", id: payroll._id },
+        payload: {
+          title: "Payroll Approved",
+          message: `Payroll for ${formatPeriod(payroll.period)} has been approved.`,
+          type: "success",
+          triggeredBy: approvedBy,
+          resource: "payroll",
+          resourceId: payroll._id,
+          role: "finance_manager",
+        },
+      }], session);
     });
+    outboxPublisher.kick();
 
-    return payrollService.getPayroll(payrollId);
+    return { payroll: await payrollService.getPayroll(payrollId), deliveryIds };
   },
 
-  async markAsPaid(payrollId) {
-    const payroll = await Payroll.findById(payrollId);
-    if (!payroll) {
-      const error = new Error("Payroll record not found");
-      error.statusCode = 404;
-      throw error;
-    }
+  async markAsPaid(payrollId, paidBy, { paymentReference, paidAt } = {}) {
+    let deliveryIds;
 
-    if (payroll.status !== "approved") {
-      const error = new Error("Only approved payrolls can be marked as paid");
-      error.statusCode = 400;
-      throw error;
-    }
-
-    payroll.status = "paid";
-    payroll.paidAt = new Date();
-    await payroll.save();
-
-    await notificationService.send({
-      title: "Salary Payment",
-      message: `Your salary for ${period.month}/${period.year} has been paid. Check your account.`,
-      type: "success",
-      resource: "payroll",
-      broadcast: false,
-      userId: payroll.employee.user,
-    });
-
-    await emailQueue.add(
-      {
-        type: "payslip-ready",
-        data: {
-          to: employeeUser.email,
-          firstName: employeeUser.firstName,
-          employeeId: employee.employeeId,
-          period: `${payroll.period.month}/${payroll.period.year}`,
-          basicSalary: formatCurrency(payroll.basicSalary),
-          totalAllowances: formatCurrency(totalAllowances),
-          totalDeductions: formatCurrency(totalDeductions),
-          grossPay: formatCurrency(payroll.grossPay),
-          netPay: formatCurrency(payroll.netPay),
-          bankName: employee.bankDetails?.bankName,
-          accountNumber: employee.bankDetails?.accountNumber,
-          paidAt: payroll.paidAt,
-          payslipUrl: `${process.env.CLIENT_URL}/payroll/${payroll._id}`,
+    await mongoose.connection.transaction(async (session) => {
+      const payroll = await Payroll.findOneAndUpdate(
+        { _id: payrollId, status: "approved" },
+        {
+          $set: {
+            status: "paid",
+            paidAt: paidAt || new Date(),
+            paidBy,
+            ...(paymentReference && { paymentReference }),
+          },
         },
-      },
-      { jobId: uuidv4() },
-    );
+        { session, new: true },
+      );
 
-    return payrollService.getPayroll(payrollId);
+      if (!payroll) {
+        const exists = await Payroll.exists({ _id: payrollId }).session(session);
+        if (!exists) throw httpError("Payroll record not found", 404);
+        throw httpError("Only approved payrolls can be marked as paid", 400);
+      }
+
+      const employee = await Employee.findById(payroll.employee)
+        .select("employeeId user bankDetails")
+        .populate("user", "firstName email")
+        .session(session)
+        .lean();
+      if (!employee?.user) {
+        deliveryIds = [];
+        return;
+      }
+
+      const period = formatPeriod(payroll.period);
+      const money = (amount) => formatCurrency(amount, payroll.currency);
+      const deliveryPrefix = `payroll:${payroll._id}:paid`;
+
+      deliveryIds = await outboxService.enqueue([
+        {
+          deliveryId: `${deliveryPrefix}:notification:${employee.user._id}`,
+          eventType: "payroll.payment_recorded",
+          channel: "notification",
+          aggregate: { type: "payroll", id: payroll._id },
+          payload: {
+            title: "Salary Payment Recorded",
+            message: `A salary payment for ${period} has been recorded.`,
+            type: "success",
+            triggeredBy: paidBy,
+            resource: "payroll",
+            resourceId: payroll._id,
+            userId: employee.user._id,
+          },
+        },
+        {
+          deliveryId: `${deliveryPrefix}:email:${employee.user._id}`,
+          eventType: "payroll.payment_recorded",
+          channel: "email",
+          aggregate: { type: "payroll", id: payroll._id },
+          payload: {
+            type: "payslip-ready",
+            data: {
+              to: employee.user.email,
+              firstName: employee.user.firstName,
+              employeeId: employee.employeeId,
+              period,
+              basicSalary: money(payroll.basicSalary),
+              totalAllowances: money(sum(payroll.allowances)),
+              totalDeductions: money(sum(payroll.deductions)),
+              grossPay: money(payroll.grossPay),
+              netPay: money(payroll.netPay),
+              bankName: employee.bankDetails?.bankName,
+              accountNumber: maskAccountNumber(employee.bankDetails?.accountNumber),
+              paidAt: payroll.paidAt,
+              payslipUrl: `${process.env.CLIENT_URL}/payroll/${payroll._id}`,
+            },
+          },
+        },
+      ], session);
+    });
+    outboxPublisher.kick();
+
+    return { payroll: await payrollService.getPayroll(payrollId), deliveryIds };
   },
 };
 

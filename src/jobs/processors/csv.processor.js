@@ -1,20 +1,18 @@
-const { csvQueue }        = require('../queue');
+const queues              = require('../queue');
 const Employee            = require('../../modules/employees/employee.model');
 const Payroll             = require('../../modules/payroll/payroll.model');
 const Leave               = require('../../modules/leave/leave.model');
 const AuditLog            = require('../../modules/audit/auditLog.model');
 const { stringify }       = require('csv-stringify');
-const { v4: uuidv4 }      = require('uuid');
 const path                = require('path');
 const fs                  = require('fs');
-const notificationService = require('../../modules/notification/notification.service');
-const { emailQueue } = require('../queue');
-const User           = require('../../modules/users/user.model');
+const outboxService       = require('../../modules/outbox/outbox.service');
+const outboxPublisher     = require('../../modules/outbox/outbox.publisher');
+const User                = require('../../modules/users/user.model');
 
-const OUTPUT_DIR = path.join(process.cwd(), 'storage', 'csv');
-if (!fs.existsSync(OUTPUT_DIR)) {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
+const OUTPUT_DIR = path.join(process.env.STORAGE_DIR || path.join(process.cwd(), 'storage'), 'csv');
+const META_DIR   = path.join(OUTPUT_DIR, '.meta');
+fs.mkdirSync(META_DIR, { recursive: true });
 
 
 function formatDate(date) {
@@ -29,9 +27,10 @@ function formatDateTime(date) {
   return isNaN(d) ? '' : `${d.toISOString().split('T')[0]} ${d.toTimeString().split(' ')[0]}`;
 }
 
-function writeCSV(filePath, columns, rows) {
-  return new Promise((resolve, reject) => {
-    const output     = fs.createWriteStream(filePath);
+async function writeCSV(filePath, columns, rows) {
+  const partialPath = `${filePath}.part`;
+  await new Promise((resolve, reject) => {
+    const output     = fs.createWriteStream(partialPath);
     const stringifier = stringify({ header: true, columns });
 
     output.on('finish', resolve);
@@ -42,9 +41,10 @@ function writeCSV(filePath, columns, rows) {
     rows.forEach(row => stringifier.write(row));
     stringifier.end();
   });
+  fs.renameSync(partialPath, filePath);
 }
 
-async function processEmployeeExport(job) {
+async function processEmployeeExport(job, filename) {
   const { query } = job.data;
 
   const filter = {};
@@ -61,7 +61,6 @@ async function processEmployeeExport(job) {
 
   await job.progress(50);
 
-  const filename = `employees_${Date.now()}.csv`;
   const filePath = path.join(OUTPUT_DIR, filename);
 
   const columns = [
@@ -106,7 +105,7 @@ async function processEmployeeExport(job) {
   return { filename, total: rows.length };
 }
 
-async function processPayrollExport(job) {
+async function processPayrollExport(job, filename) {
   const { query } = job.data;
 
   const filter = {};
@@ -129,7 +128,6 @@ async function processPayrollExport(job) {
 
   await job.progress(50);
 
-  const filename = `payroll_${Date.now()}.csv`;
   const filePath = path.join(OUTPUT_DIR, filename);
 
   const columns = [
@@ -174,7 +172,7 @@ async function processPayrollExport(job) {
   return { filename, total: rows.length };
 }
 
-async function processLeaveExport(job) {
+async function processLeaveExport(job, filename) {
   const { query } = job.data;
 
   const filter = {};
@@ -197,7 +195,6 @@ async function processLeaveExport(job) {
 
   await job.progress(50);
 
-  const filename = `leave_${Date.now()}.csv`;
   const filePath = path.join(OUTPUT_DIR, filename);
 
   const columns = [
@@ -236,7 +233,7 @@ async function processLeaveExport(job) {
   return { filename, total: rows.length };
 }
 
-async function processAuditExport(job) {
+async function processAuditExport(job, filename) {
   const { query } = job.data;
 
   const filter = {};
@@ -258,7 +255,6 @@ async function processAuditExport(job) {
 
   await job.progress(50);
 
-  const filename = `audit_logs_${Date.now()}.csv`;
   const filePath = path.join(OUTPUT_DIR, filename);
 
   const columns = [
@@ -302,79 +298,149 @@ async function processAuditExport(job) {
 }
 
 
-csvQueue.process(async (job) => {
-  const { type, userId } = job.data;
-  console.log(`Processing CSV job [${job.id}] type: ${type}`);
+const EXPORTS = {
+  'employees':  { prefix: 'employees',  generate: processEmployeeExport },
+  'payroll':    { prefix: 'payroll',    generate: processPayrollExport  },
+  'leave':      { prefix: 'leave',      generate: processLeaveExport    },
+  'audit-logs': { prefix: 'audit_logs', generate: processAuditExport    }
+};
 
+function manifestPath(filename) {
+  return path.join(META_DIR, `${filename}.json`);
+}
+
+function readManifest(filename) {
+  if (!fs.existsSync(path.join(OUTPUT_DIR, filename))) return null;
   try {
-    let result;
+    return JSON.parse(fs.readFileSync(manifestPath(filename), 'utf8'));
+  } catch {
+    return null;
+  }
+}
 
-    switch (type) {
-      case 'employees':  result = await processEmployeeExport(job); break;
-      case 'payroll':    result = await processPayrollExport(job);  break;
-      case 'leave':      result = await processLeaveExport(job);    break;
-      case 'audit-logs': result = await processAuditExport(job);    break;
-      default: throw new Error(`Unknown CSV export type: ${type}`);
-    }
+async function generateOnce(job, type) {
+  const filename = `${EXPORTS[type].prefix}_${job.id}.csv`;
+  const existing = readManifest(filename);
+  if (existing) return { ...existing, reused: true };
 
-    await job.progress(100);
+  const { total } = await EXPORTS[type].generate(job, filename);
+  const manifest = { filename, total, generatedAt: new Date().toISOString() };
+  fs.writeFileSync(manifestPath(filename), JSON.stringify(manifest));
+  return { ...manifest, reused: false };
+}
 
-    // notify user — CSV is ready
-    await notificationService.send({
+async function recordCompletion(job, type, userId, result) {
+  const jobId    = String(job.id);
+  const prefix   = `export:${jobId}:completed`;
+  const metadata = {
+    jobId,
+    filename:    result.filename,
+    total:       result.total,
+    downloadUrl: `/api/v1/export/download/${result.filename}`
+  };
+
+  const deliveries = [{
+    deliveryId: `${prefix}:notification:${userId}`,
+    eventType:  'export.completed',
+    channel:    'notification',
+    aggregate:  { type: 'export', id: jobId },
+    payload: {
       title:    'Your CSV Export is Ready',
       message:  `Your ${type} export (${result.total} records) is ready to download.`,
       type:     'success',
       resource: 'csv',
       userId,
-      metadata: {
-        downloadUrl: `/api/v1/export/download/${result.filename}`,
-        filename:    result.filename,
-        total:       result.total,
-        jobId:       job.id
+      metadata
+    }
+  }];
+
+  const user = await User.findOne({ _id: userId, isActive: true }).select('email firstName').lean();
+  if (user) {
+    deliveries.push({
+      deliveryId: `${prefix}:email:${userId}`,
+      eventType:  'export.completed',
+      channel:    'email',
+      aggregate:  { type: 'export', id: jobId },
+      payload: {
+        type: 'file-ready',
+        data: {
+          to:          user.email,
+          firstName:   user.firstName,
+          fileType:    `${type} Report`,
+          filename:    result.filename,
+          downloadUrl: `${process.env.CLIENT_URL}/download?file=${encodeURIComponent(result.filename)}`
+        }
       }
     });
+  }
 
-    const user = await User.findById(userId).select('email firstName').lean();
+  await outboxService.enqueueOnce(deliveries);
+  outboxPublisher.kick();
+  return metadata;
+}
 
-    if (user) {
-        await emailQueue.add(
-            {
-            type: 'file-ready',
-            data: {
-                to:          user.email,
-                firstName:   user.firstName,
-                fileType:    type === 'payslip' ? 'PDF Payslip' : `${type} Report`,
-                filename,
-                downloadUrl: `${process.env.CLIENT_URL}/download?file=${filename}`
-            }
-            },
-            { jobId: uuidv4() }
-        );
+async function recordFailure(job, type, userId) {
+  const jobId = String(job.id);
+  await outboxService.enqueueOnce([{
+    deliveryId: `export:${jobId}:failed:notification:${userId}`,
+    eventType:  'export.failed',
+    channel:    'notification',
+    aggregate:  { type: 'export', id: jobId },
+    payload: {
+      title:    'CSV Export Failed',
+      message:  `We could not generate your ${type} export. Please try again.`,
+      type:     'error',
+      resource: 'csv',
+      userId,
+      metadata: { jobId }
     }
+  }]);
+  outboxPublisher.kick();
+}
+
+async function handleCsvJob(job) {
+  const { type, userId } = job.data;
+  console.log(`Processing CSV job [${job.id}] type: ${type}`);
+
+  try {
+    if (!EXPORTS[type]) throw new Error(`Unknown CSV export type: ${type}`);
+
+    const result = await generateOnce(job, type);
+    await job.progress(100);
+
+    const metadata = await recordCompletion(job, type, userId, result);
 
     console.log(`CSV job [${job.id}] completed: ${result.filename} (${result.total} records)`);
-    return result;
+    return metadata;
 
   } catch (err) {
     console.error(`CSV job [${job.id}] failed:`, err.message);
 
-    await notificationService.send({
-      title:   'CSV Export Failed',
-      message: `We could not generate your ${type} export. Please try again.`,
-      type:    'error',
-      userId
-    });
+    const finalAttempt = job.attemptsMade + 1 >= (job.opts?.attempts || 1);
+    if (finalAttempt) {
+      await recordFailure(job, type, userId).catch(e =>
+        console.error(`CSV job [${job.id}] failure notice not recorded:`, e.message));
+    }
 
     throw err;
   }
-});
+}
 
-csvQueue.on('completed', (job, result) => {
-  console.log(`CSV Job ${job.id} completed: ${result.filename} — ${result.total} records`);
-});
+function register() {
+  const csvQueue = queues.csvQueue;
+  csvQueue.process(handleCsvJob).catch(err => {
+    if (err) console.error(`csvQueue processing stopped:`, err.message);
+  });
 
-csvQueue.on('failed', (job, err) => {
-  console.error(`CSV Job ${job.id} failed:`, err.message);
-});
+  csvQueue.on('completed', (job, result) => {
+    console.log(`CSV Job ${job.id} completed: ${result.filename} — ${result.total} records`);
+  });
 
-module.exports = csvQueue;
+  csvQueue.on('failed', (job, err) => {
+    console.error(`CSV Job ${job.id} failed:`, err.message);
+  });
+
+  return queues.workerReady(csvQueue);
+}
+
+module.exports = { handleCsvJob, register, OUTPUT_DIR };

@@ -2,21 +2,7 @@ const { paginate, paginationMeta } = require("../../utils/paginate");
 const AuditLog = require("./auditLog.model");
 const suspiciousActivityService = require("./suspiciousActivity.service");
 
-const SENSITIVE_FIELDS = [
-  "password",
-  "confirmPassword",
-  "token",
-  "refreshToken",
-];
-
-function sanitizeBody(body) {
-  if (!body || typeof body !== "object") return body;
-  const sanitized = { ...body };
-  SENSITIVE_FIELDS.forEach((field) => {
-    if (sanitized[field]) sanitized[field] = "***REDACTED***";
-  });
-  return sanitized;
-}
+const { redactSensitive, redactUrl } = require('../../utils/redactSensitive');
 
 const auditService = {
   async log({
@@ -46,10 +32,10 @@ const auditService = {
         permission,
         request: {
           method: request.method,
-          url: request.originalUrl,
-          body: sanitizeBody(request.body),
-          params: request.params,
-          query: request.query,
+          url: redactUrl(request.originalUrl),
+          body: redactSensitive(request.body),
+          params: redactSensitive(request.params),
+          query: redactSensitive(request.query),
         },
         response,
         device,

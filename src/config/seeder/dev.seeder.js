@@ -11,6 +11,8 @@ const Payroll = require('../../modules/payroll/payroll.model');
 const Leave = require('../../modules/leave/leave.model');
 const AuditLog = require('../../modules/audit/auditLog.model');
 const bcrypt = require('bcryptjs');
+const env = require('../env');
+const { assertDevSeedAllowed } = require('./devSeedGuard');
 
 const SEED_EMPLOYEES = Math.max(1, parseInt(process.env.SEED_EMPLOYEES || '1500', 10));
 const SEED_AUDIT_LOGS = Math.max(0, parseInt(process.env.SEED_AUDIT_LOGS || '2000', 10));
@@ -952,6 +954,7 @@ async function getPermissionNames(permissionIds) {
 // ─── Main Runner ──────────────────────────────────────────────────────────────
 
 async function runDevSeeder() {
+  assertDevSeedAllowed({ nodeEnv: process.env.NODE_ENV, mongoUri: env.mongoUri, argv: process.argv });
   await connectDB();
 
    const isFresh = process.argv.includes('--fresh');

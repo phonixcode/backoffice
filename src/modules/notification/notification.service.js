@@ -1,5 +1,32 @@
 const Notification = require("./notification.model");
+const Role = require("../roles/role.model");
 const { sseManager } = require("./sse.manager");
+const { paginate, paginationMeta } = require("../../utils/paginate");
+
+function notFound() {
+  const error = new Error("Notification not found");
+  error.statusCode = 404;
+  return error;
+}
+
+async function activeRoleNames(user) {
+  const roleIds = (user.roles || []).map((r) => (typeof r === "object" && r._id ? r._id : r));
+  if (roleIds.length === 0) return [];
+  const roles = await Role.find({ _id: { $in: roleIds }, isActive: true })
+    .select("name")
+    .lean();
+  return roles.map((r) => r.name);
+}
+
+async function visibilityFilter(user) {
+  return {
+    $or: [
+      { userId: user._id },
+      { role: { $in: await activeRoleNames(user) } },
+      { broadcast: true },
+    ],
+  };
+}
 
 const notificationService = {
   async send({
@@ -9,11 +36,13 @@ const notificationService = {
     triggeredBy,
     resource,
     resourceId,
-    userId, 
-    role, 
-    broadcast, 
+    userId,
+    role,
+    broadcast,
+    metadata,
+    deliveryId,
   }) {
-    const notification = await Notification.create({
+    const fields = {
       title,
       message,
       type,
@@ -23,35 +52,35 @@ const notificationService = {
       userId,
       role,
       broadcast: broadcast || false,
-    });
+      metadata,
+    };
 
-    // push via SSE immediately after saving
-    sseManager.deliver(notification);
+    let notification;
+    if (deliveryId) {
+      const result = await Notification.findOneAndUpdate(
+        { deliveryId },
+        { $setOnInsert: { ...fields, deliveryId } },
+        { upsert: true, new: true, includeResultMetadata: true },
+      );
+      notification = result.value;
+      if (result.lastErrorObject?.updatedExisting) return notification;
+    } else {
+      notification = await Notification.create(fields);
+    }
+
+    sseManager.deliver(notification).catch((err) =>
+      console.error("SSE delivery failed:", err.message),
+    );
 
     return notification;
   },
 
   async getForUser(user, query = {}) {
-    const { page = 1, limit = 20, unreadOnly = false } = query;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = paginate(query, 100);
+    const unreadOnly = query.unreadOnly === "true" || query.unreadOnly === true;
 
-    const filter = {
-      $or: [
-        { userId: user._id }, 
-        {
-          role: {
-            $in: user.roles.map(
-              (
-                r, // role-based
-              ) => (typeof r === "object" ? r.name : r),
-            ),
-          },
-        },
-        { broadcast: true }, 
-      ],
-    };
-
-    if (unreadOnly === "true" || unreadOnly === true) {
+    const filter = await visibilityFilter(user);
+    if (unreadOnly) {
       filter["readBy.user"] = { $ne: user._id };
     }
 
@@ -60,7 +89,7 @@ const notificationService = {
       Notification.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limit)
         .lean(),
     ]);
 
@@ -72,82 +101,52 @@ const notificationService = {
 
     return {
       notifications: mapped,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / limit),
-        hasNext: page < Math.ceil(total / limit),
-        hasPrev: page > 1,
-      },
+      pagination: paginationMeta(total, page, limit),
     };
   },
 
-
   async getUnreadCount(user) {
-    const filter = {
-      $or: [
-        { userId: user._id },
-        {
-          role: {
-            $in: user.roles.map((r) => (typeof r === "object" ? r.name : r)),
-          },
-        },
-        { broadcast: true },
-      ],
-      "readBy.user": { $ne: user._id },
-    };
-
+    const filter = await visibilityFilter(user);
+    filter["readBy.user"] = { $ne: user._id };
     return Notification.countDocuments(filter);
   },
 
+  async markAsRead(notificationId, user) {
+    const filter = await visibilityFilter(user);
+    const visible = await Notification.exists({ _id: notificationId, ...filter });
+    if (!visible) throw notFound();
 
-  async markAsRead(notificationId, userId) {
-    const notification = await Notification.findById(notificationId);
-    if (!notification) {
-      const error = new Error("Notification not found");
-      error.statusCode = 404;
-      throw error;
-    }
-
-    const alreadyRead = notification.readBy.some(
-      (r) => r.user.toString() === userId.toString(),
+    await Notification.updateOne(
+      { _id: notificationId, "readBy.user": { $ne: user._id } },
+      { $push: { readBy: { user: user._id, readAt: new Date() } } },
     );
-
-    if (!alreadyRead) {
-      await Notification.findByIdAndUpdate(notificationId, {
-        $push: { readBy: { user: userId, readAt: new Date() } },
-      });
-    }
   },
 
   async markAllAsRead(user) {
-    const filter = {
-      $or: [
-        { userId: user._id },
-        {
-          role: {
-            $in: user.roles.map((r) => (typeof r === "object" ? r.name : r)),
-          },
-        },
-        { broadcast: true },
-      ],
-      "readBy.user": { $ne: user._id },
-    };
+    const filter = await visibilityFilter(user);
+    filter["readBy.user"] = { $ne: user._id };
 
-    const unread = await Notification.find(filter).select("_id");
-
-    if (unread.length === 0) return;
-
-    const now = new Date();
-    await Notification.updateMany(
-      { _id: { $in: unread.map((n) => n._id) } },
-      { $push: { readBy: { user: user._id, readAt: now } } },
-    );
+    await Notification.updateMany(filter, {
+      $push: { readBy: { user: user._id, readAt: new Date() } },
+    });
   },
 
-  async deleteNotification(notificationId) {
-    await Notification.findByIdAndDelete(notificationId);
+  async deleteNotification(notificationId, user) {
+    const notification = await Notification.findOne({
+      _id: notificationId,
+      ...(await visibilityFilter(user)),
+    })
+      .select("userId")
+      .lean();
+    if (!notification) throw notFound();
+
+    if (notification.userId?.toString() !== user._id.toString()) {
+      const error = new Error("Shared notifications cannot be deleted");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    await Notification.deleteOne({ _id: notificationId, userId: user._id });
   },
 };
 

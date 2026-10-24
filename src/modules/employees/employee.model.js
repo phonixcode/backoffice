@@ -77,6 +77,16 @@ const employeeSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    termination: {
+      reason: {
+        type: String,
+        enum: ["resignation", "dismissal", "redundancy", "end_of_contract", "retirement", "other"],
+      },
+      note: { type: String, trim: true, select: false },
+      effectiveDate: Date,
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      recordedAt: Date,
+    },
   },
   { timestamps: true },
 );

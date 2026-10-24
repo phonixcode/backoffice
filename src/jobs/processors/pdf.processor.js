@@ -1,9 +1,8 @@
-const { pdfQueue }          = require('../queue');
+const queues                = require('../queue');
 const pdfService            = require('../../modules/pdf/pdf.service');
 const path                  = require('path');
 const fs                    = require('fs');
 const notificationService   = require('../../modules/notification/notification.service');
-const { emailQueue } = require('../queue');
 const User           = require('../../modules/users/user.model');
 const { v4: uuidv4 }      = require('uuid');
 
@@ -12,7 +11,7 @@ if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
-pdfQueue.process(async (job) => {
+async function handlePdfJob(job) {
   const { type, query, userId, payrollId } = job.data;
 
   console.log(`Processing PDF job [${job.id}] type: ${type}`);
@@ -75,7 +74,7 @@ pdfQueue.process(async (job) => {
     const user = await User.findById(userId).select('email firstName').lean();
 
     if (user) {
-        await emailQueue.add(
+        await queues.emailQueue.add(
             {
             type: 'file-ready',
             data: {
@@ -108,19 +107,27 @@ pdfQueue.process(async (job) => {
 
     throw err;
   }
-});
+}
 
-// job event listeners
-pdfQueue.on('completed', (job, result) => {
-  console.log(`Job ${job.id} completed:`, result.filename);
-});
+function register() {
+  const pdfQueue = queues.pdfQueue;
+  pdfQueue.process(handlePdfJob).catch(err => {
+    if (err) console.error(`pdfQueue processing stopped:`, err.message);
+  });
 
-pdfQueue.on('failed', (job, err) => {
-  console.error(`Job ${job.id} failed after ${job.opts.attempts} attempts:`, err.message);
-});
+  pdfQueue.on('completed', (job, result) => {
+    console.log(`Job ${job.id} completed:`, result.filename);
+  });
 
-pdfQueue.on('stalled', (job) => {
-  console.warn(`Job ${job.id} stalled — will be retried`);
-});
+  pdfQueue.on('failed', (job, err) => {
+    console.error(`Job ${job.id} failed after ${job.opts.attempts} attempts:`, err.message);
+  });
 
-module.exports = pdfQueue;
+  pdfQueue.on('stalled', (job) => {
+    console.warn(`Job ${job.id} stalled — will be retried`);
+  });
+
+  return queues.workerReady(pdfQueue);
+}
+
+module.exports = { handlePdfJob, register };

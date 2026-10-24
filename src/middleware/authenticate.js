@@ -32,6 +32,7 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = user;
+    req.auth = { tokenVersion: decoded.tokenVersion, expiresAt: decoded.exp * 1000 };
     next();
   } catch (err) {
     next(err);

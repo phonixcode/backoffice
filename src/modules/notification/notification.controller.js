@@ -18,7 +18,7 @@ const notificationController = {
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
-        sseManager.addClient(userId, res);
+        sseManager.addClient(userId, res, req.auth);
 
         res.write(`event: connected\n`);
         res.write(`data: ${JSON.stringify({ message: 'Connected' })}\n\n`);
@@ -26,7 +26,7 @@ const notificationController = {
         notificationService.getUnreadCount(req.user).then(count => {
             res.write(`event: unread_count\n`);
             res.write(`data: ${JSON.stringify({ count })}\n\n`);
-        });
+        }).catch(err => console.error('Unread count failed:', err.message));
 
         req.on('close', () => {
             sseManager.removeClient(userId, res);
@@ -44,7 +44,7 @@ const notificationController = {
   }),
 
   markAsRead: asyncHandler(async (req, res) => {
-    await notificationService.markAsRead(req.params.id, req.user._id);
+    await notificationService.markAsRead(req.params.id, req.user);
     return apiResponse.success(res, 'Notification marked as read');
   }),
 
@@ -54,7 +54,7 @@ const notificationController = {
   }),
 
   delete: asyncHandler(async (req, res) => {
-    await notificationService.deleteNotification(req.params.id);
+    await notificationService.deleteNotification(req.params.id, req.user);
     return apiResponse.success(res, 'Notification deleted');
   })
 };

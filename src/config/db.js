@@ -17,7 +17,8 @@ const connectDB = async () => {
       maxPoolSize:              10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS:          45000,
-      family:                   4
+      family:                   4,
+      autoIndex:                env.nodeEnv !== 'production'
     });
 
     console.log(`MongoDB connected: ${conn.connection.host}`);

@@ -1,7 +1,7 @@
 const Attendance         = require('./attendance.model');
 const AttendanceSettings = require('./attendance-settings.model');
 const Employee           = require('../employees/employee.model');
-const { createNotification } = require('../notifications/notification.service');
+const { createNotification } = require('../notification/notification.service');
 
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
   const R    = 6371000;

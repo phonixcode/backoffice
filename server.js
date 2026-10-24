@@ -1,18 +1,23 @@
+process.on('SIGTERM', () => handleSignal('SIGTERM'));
+process.on('SIGINT',  () => handleSignal('SIGINT'));
+
 const app       = require('./src/app');
 const connectDB = require('./src/config/db');
 const dbInit    = require('./src/config/dbInit');
 const env       = require('./src/config/env');
+const mongoose  = require('mongoose');
 const path      = require('path');
 const fs        = require('fs');
+const { startWorkers }    = require('./src/jobs/workers');
+const { closeQueues }     = require('./src/jobs/queue');
+const outboxPublisher     = require('./src/modules/outbox/outbox.publisher');
+const { sseManager }      = require('./src/modules/notification/sse.manager');
 
-// background workers
-require('./src/jobs/processors/pdf.processor');
-require('./src/jobs/processors/csv.processor');
-require('./src/jobs/processors/email.processor');
-
+const STORAGE_ROOT = process.env.STORAGE_DIR || path.join(process.cwd(), 'storage');
 const STORAGE_DIRS = [
-  path.join(process.cwd(), 'storage', 'pdfs'),
-  path.join(process.cwd(), 'storage', 'csv')
+  path.join(STORAGE_ROOT, 'pdfs'),
+  path.join(STORAGE_ROOT, 'csv'),
+  path.join(STORAGE_ROOT, 'csv', '.meta')
 ];
 
 function cleanupExpiredFiles() {
@@ -26,6 +31,7 @@ function cleanupExpiredFiles() {
 
       try {
         const stats    = fs.statSync(filePath);
+        if (!stats.isFile()) return;
         const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
 
         if (ageHours > 24) {
@@ -52,18 +58,57 @@ STORAGE_DIRS.forEach(dir => {
 });
 
 // run cleanup every hour
-setInterval(cleanupExpiredFiles, 60 * 60 * 1000);
+const cleanupTimer = setInterval(cleanupExpiredFiles, 60 * 60 * 1000);
+
+let server = null;
+let connecting = null;
+let stopping = false;
+
+async function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal} received — shutting down`);
+  clearInterval(cleanupTimer);
+  if (server) server.close();
+  sseManager.closeAll();
+  await outboxPublisher.stop();
+  await closeQueues();
+  if (connecting) await connecting.catch(() => {});
+  await mongoose.disconnect();
+  process.exit(0);
+}
+
+function handleSignal(signal) {
+  shutdown(signal).catch(err => {
+    console.error('Shutdown failed:', err.message);
+    process.exit(1);
+  });
+}
 
 const start = async () => {
-  await connectDB();
+  connecting = connectDB();
+  await connecting;
+  if (stopping) return;
   await dbInit();
+  if (stopping) return;
 
-  app.listen(env.port, () => {
-    console.log(`Server running in ${env.nodeEnv} mode on port ${env.port}`);
+  if (process.env.RUN_WORKERS !== 'false') {
+    await startWorkers();
+    if (stopping) return;
     console.log(`background worker started`);
+  } else {
+    outboxPublisher.start();
+  }
+
+  server = app.listen(env.port, () => {
+    console.log(`Server running in ${env.nodeEnv} mode on port ${env.port}`);
     console.log(`File cleanup scheduled every 1 hour (24h expiry)`);
     cleanupExpiredFiles();
   });
 };
 
-start();
+start().catch(err => {
+  if (stopping) return;
+  console.error('Startup failed:', err.message);
+  process.exit(1);
+});

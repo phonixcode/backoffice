@@ -1,4 +1,4 @@
-const { csvQueue }  = require('../../jobs/queue');
+const queues        = require('../../jobs/queue');
 const { v4: uuidv4} = require('uuid');
 const asyncHandler  = require('../../utils/asyncHandler');
 const apiResponse   = require('../../utils/apiResponse');
@@ -9,7 +9,7 @@ const exportController = {
 
   employees: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
-    const job   = await csvQueue.add(
+    const job   = await queues.csvQueue.add(
       { type: 'employees', query: req.query, userId: req.user._id },
       { jobId }
     );
@@ -21,7 +21,7 @@ const exportController = {
 
   payroll: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
-    const job   = await csvQueue.add(
+    const job   = await queues.csvQueue.add(
       { type: 'payroll', query: req.query, userId: req.user._id },
       { jobId }
     );
@@ -33,7 +33,7 @@ const exportController = {
 
   leave: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
-    const job   = await csvQueue.add(
+    const job   = await queues.csvQueue.add(
       { type: 'leave', query: req.query, userId: req.user._id },
       { jobId }
     );
@@ -45,7 +45,7 @@ const exportController = {
 
   auditLogs: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
-    const job   = await csvQueue.add(
+    const job   = await queues.csvQueue.add(
       { type: 'audit-logs', query: req.query, userId: req.user._id },
       { jobId }
     );
@@ -57,7 +57,7 @@ const exportController = {
 
   // check job status
   jobStatus: asyncHandler(async (req, res) => {
-    const job = await csvQueue.getJob(req.params.jobId);
+    const job = await queues.csvQueue.getJob(req.params.jobId);
     if (!job) return apiResponse.error(res, 'Job not found', 404);
 
     const state    = await job.getState();
@@ -75,7 +75,7 @@ const exportController = {
 
   download: asyncHandler(async (req, res) => {
     const filename = path.basename(req.params.filename);
-    const filePath = path.join(process.cwd(), 'storage', 'csv', filename);
+    const filePath = path.join(process.env.STORAGE_DIR || path.join(process.cwd(), 'storage'), 'csv', filename);
 
     if (!fs.existsSync(filePath)) {
       return apiResponse.error(res, 'File not found or has expired', 404);

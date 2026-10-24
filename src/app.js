@@ -1,3 +1,5 @@
+// Load and validate configuration before configuring CORS or other middleware.
+require('./config/env');
 const express        = require('express');
 const cors           = require('cors');
 const helmet         = require('helmet');

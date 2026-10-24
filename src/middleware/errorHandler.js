@@ -1,6 +1,5 @@
-const env = require('../config/env');
-
 const errorHandler = (err, req, res, next) => {
+  if (res.headersSent) return next(err);
   console.error(err.stack);
 
   if (err.name === 'ValidationError') {
@@ -9,7 +8,7 @@ const errorHandler = (err, req, res, next) => {
   }
 
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
+    const field = Object.keys(err.keyValue || {})[0] || 'Record';
     return res.status(409).json({ success: false, message: `${field} already exists` });
   }
 
@@ -21,10 +20,19 @@ const errorHandler = (err, req, res, next) => {
     return res.status(401).json({ success: false, message: 'Token expired' });
   }
 
-  return res.status(err.statusCode || 500).json({
+  if (err.name === 'CastError') {
+    return res.status(400).json({ success: false, message: 'Invalid resource identifier' });
+  }
+
+  const candidate = err.statusCode || err.status;
+  const status = Number.isInteger(candidate) && candidate >= 400 && candidate <= 599
+    ? candidate : 500;
+  const production = process.env.NODE_ENV === 'production';
+  return res.status(status).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(env.nodeEnv === 'development' && { stack: err.stack })
+    message: production && status >= 500
+      ? 'Internal Server Error' : (err.message || 'Internal Server Error'),
+    ...((process.env.NODE_ENV || 'development') === 'development' && { stack: err.stack })
   });
 };
 

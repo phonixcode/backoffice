@@ -10,9 +10,11 @@ require('../modules/payroll/payroll.model');
 require('../modules/leave/leave.model');
 require('../modules/audit/auditLog.model');
 require('../modules/auth/refreshToken.model');
-require('../modules/notifications/notification.model');
+// require('../modules/notifications/notification.model');
 require('../modules/attendance/attendance.model');
 require('../modules/attendance/attendance-settings.model');
+require('../modules/notification/notification.model');
+require('../modules/outbox/outbox.model');
 
 async function ensureCollections() {
   const conn = mongoose.connection;
@@ -29,27 +31,34 @@ async function ensureCollections() {
   }
 }
 
+async function diffIndexes() {
+  const diffs = [];
+  for (const modelName of mongoose.modelNames()) {
+    const model = mongoose.model(modelName);
+    const { toDrop, toCreate } = await model.diffIndexes();
+    diffs.push({ collection: model.collection.name, toDrop, toCreate });
+  }
+  return diffs;
+}
+
 async function syncIndexes() {
-//   console.log('Syncing indexes...');
-
-  const models = mongoose.modelNames();
-
-  for (const modelName of models) {
+  const failures = [];
+  for (const modelName of mongoose.modelNames()) {
     const model = mongoose.model(modelName);
     try {
       await model.syncIndexes();
-    //   console.log(`Indexes synced: ${model.collection.name}`);
     } catch (err) {
-      console.error(`Index sync failed for ${model.collection.name}:`, err.message);
+      failures.push({ collection: model.collection.name, error: err.message });
     }
   }
-
-//   console.log('All indexes synced\n');
+  return failures;
 }
 
 async function dbInit() {
   await ensureCollections();
-  await syncIndexes();
 }
 
 module.exports = dbInit;
+module.exports.ensureCollections = ensureCollections;
+module.exports.diffIndexes = diffIndexes;
+module.exports.syncIndexes = syncIndexes;

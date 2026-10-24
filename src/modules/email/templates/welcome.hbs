@@ -1,7 +1,7 @@
 <p class="greeting">Welcome to BackOffice NG 🎉</p>
 <p class="intro">
-  Hello {{firstName}}, your employee account has been created on BackOffice NG.
-  Here are your login details — please change your password after your first login.
+  Hello {{firstName}}, your employee profile has been created on BackOffice NG.
+  Sign in with your existing account credentials to view it.
 </p>
 
 <div class="info-card">
@@ -26,17 +26,14 @@
     <span class="info-value">{{email}}</span>
   </div>
   <div class="info-row">
-    <span class="info-label">Temporary Password</span>
-    <span class="info-value">{{tempPassword}}</span>
-  </div>
-  <div class="info-row">
     <span class="info-label">Start Date</span>
     <span class="info-value">{{startDate}}</span>
   </div>
 </div>
 
-<div class="warning">
-  🔑 Please change your temporary password immediately after logging in.
+<div class="info">
+  BackOffice NG never sends passwords by email. If you cannot sign in, use
+  the password reset option on the login page.
 </div>
 
 <div class="btn-wrap">

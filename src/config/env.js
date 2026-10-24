@@ -1,4 +1,4 @@
-require('dotenv').config();
+if (process.env.SKIP_DOTENV !== 'true') require('dotenv').config();
 
 const env = {
   port: process.env.PORT || 5000,

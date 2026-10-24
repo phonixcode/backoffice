@@ -3,7 +3,7 @@ const handlebars = require('handlebars');
 const fs         = require('fs');
 const path       = require('path');
 
-const transporter = nodemailer.createTransport({
+let transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST,
   port:   Number(process.env.SMTP_PORT) || 587,
   secure: false,
@@ -55,6 +55,10 @@ async function sendEmail({ to, subject, template, tag, data }) {
 
 const emailService = {
 
+  setTransport(transport) {
+    transporter = transport;
+  },
+
   async sendForgotPassword({ to, firstName, resetUrl }) {
     return sendEmail({
       to,
@@ -102,7 +106,7 @@ const emailService = {
     });
   },
 
-  async sendWelcome({ to, firstName, fullName, employeeId, department, jobTitle, email, tempPassword, startDate }) {
+  async sendWelcome({ to, firstName, fullName, employeeId, department, jobTitle, email, startDate }) {
     return sendEmail({
       to,
       subject:  'Welcome to BackOffice NG 🎉',
@@ -115,7 +119,6 @@ const emailService = {
         department,
         jobTitle,
         email,
-        tempPassword,
         startDate: new Date(startDate).toLocaleDateString('en-NG', {
           day: '2-digit', month: 'long', year: 'numeric'
         }),
@@ -146,7 +149,7 @@ const emailService = {
   async sendPayslipReady({ to, firstName, employeeId, period, basicSalary, totalAllowances, totalDeductions, grossPay, netPay, bankName, accountNumber, paidAt, payslipUrl }) {
     return sendEmail({
       to,
-      subject:  `Salary Payment — ${period} — BackOffice NG`,
+      subject:  `Salary Payment Recorded — ${period} — BackOffice NG`,
       template: 'payslip-ready',
       tag:      'Payroll',
       data: {

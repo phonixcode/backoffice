@@ -11,6 +11,9 @@ const refreshTokenSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  sessionEpoch: {
+    type: Number
+  },
   deviceInfo: {
     type: String,
     trim: true 

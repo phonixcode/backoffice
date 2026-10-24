@@ -1,51 +1,21 @@
-function sanitizeValue(value) {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    // reject objects containing MongoDB operators
-    const hasOperator = Object.keys(value).some(k => k.startsWith('$'));
-    if (hasOperator) return null;
+// Reject unsafe field names without changing user data (including passwords).
+// This is defense in depth; each endpoint still needs a strict input schema.
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-    // recursively sanitize nested objects
-    const sanitized = {};
-    for (const [k, v] of Object.entries(value)) {
-      sanitized[k.replace(/^\$/, '_')] = sanitizeValue(v);
-    }
-    return sanitized;
-  }
-
-  if (typeof value === 'string') {
-    // strip $ from string values
-    return value.replace(/\$/g, '');
-  }
-
-  return value;
+function hasUnsafeKeys(value) {
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, child]) =>
+    key.startsWith('$') || key.includes('.') || UNSAFE_KEYS.has(key)
+    || hasUnsafeKeys(child)
+  );
 }
 
-const sanitize = (req, res, next) => {
-  if (req.body) {
-    for (const key of Object.keys(req.body)) {
-      req.body[key] = sanitizeValue(req.body[key]);
-    }
+module.exports = (req, res, next) => {
+  if ([req.body, req.params, req.query].some(hasUnsafeKeys)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid input field names detected'
+    });
   }
-
-  if (req.params) {
-    for (const key of Object.keys(req.params)) {
-      req.params[key] = sanitizeValue(req.params[key]);
-    }
-  }
-
-  // safely handle query without reassigning the property
-  for (const key of Object.keys(req.query)) {
-    const sanitized = sanitizeValue(req.query[key]);
-    if (sanitized === null) {
-      // operator detected in query — reject entire request
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid query parameters detected'
-      });
-    }
-  }
-
   next();
 };
-
-module.exports = sanitize;

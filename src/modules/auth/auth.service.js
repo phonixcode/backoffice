@@ -7,7 +7,7 @@ const env = require("../../config/env");
 const Role = require("../roles/role.model");
 const Permission = require("../permissions/permission.model");
 const { sendMail } = require("../../middleware/mailer");
-const { emailQueue } = require("../../jobs/queue");
+const queues = require("../../jobs/queue");
 
 const authService = {
   generateAccessToken(user) {
@@ -26,11 +26,11 @@ const authService = {
     return crypto.randomBytes(64).toString("hex");
   },
 
-  async saveRefreshToken(userId, token, deviceInfo) {
+  async saveRefreshToken(userId, token, deviceInfo, sessionEpoch = 0) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    return RefreshToken.create({ userId, token, deviceInfo, expiresAt });
+    return RefreshToken.create({ userId, token, deviceInfo, expiresAt, sessionEpoch });
   },
 
   async register(data) {
@@ -99,7 +99,7 @@ const authService = {
           : "Account locked due to too many failed attempts. Try again in 30 minutes",
       );
 
-      await emailQueue.add(
+      await queues.emailQueue.add(
         {
           type: "account-locked",
           data: {
@@ -125,7 +125,7 @@ const authService = {
 
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken();
-    await this.saveRefreshToken(user._id, refreshToken, deviceInfo);
+    await this.saveRefreshToken(user._id, refreshToken, deviceInfo, user.sessionEpoch);
 
     return { user, accessToken, refreshToken };
   },
@@ -149,7 +149,7 @@ const authService = {
     // send reset email
     const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
 
-    await emailQueue.add(
+    await queues.emailQueue.add(
       {
         type: "forgot-password",
         data: {
@@ -189,7 +189,7 @@ const authService = {
 
     await RefreshToken.deleteMany({ userId: user._id });
 
-    await emailQueue.add(
+    await queues.emailQueue.add(
       {
         type: "password-reset-success",
         data: {
@@ -226,10 +226,17 @@ const authService = {
       throw error;
     }
 
+    if ((stored.sessionEpoch ?? 0) !== (user.sessionEpoch ?? 0)) {
+      await stored.deleteOne();
+      const error = new Error("Invalid refresh token");
+      error.statusCode = 401;
+      throw error;
+    }
+
     await stored.deleteOne();
     const newAccessToken = this.generateAccessToken(user);
     const newRefreshToken = this.generateRefreshToken();
-    await this.saveRefreshToken(user._id, newRefreshToken, stored.deviceInfo);
+    await this.saveRefreshToken(user._id, newRefreshToken, stored.deviceInfo, user.sessionEpoch);
 
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   },

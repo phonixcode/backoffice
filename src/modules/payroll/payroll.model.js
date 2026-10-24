@@ -35,7 +35,13 @@ const payrollSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  approvedAt: { type: Date },
+  paidBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   paidAt: { type: Date },
+  paymentReference: { type: String, trim: true },
   notes:  { type: String, trim: true }
 }, { timestamps: true });
 

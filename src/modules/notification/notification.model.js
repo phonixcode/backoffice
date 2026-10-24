@@ -34,7 +34,8 @@ const notificationSchema = new mongoose.Schema(
     ],
     metadata: {
        type: mongoose.Schema.Types.Mixed
-    }
+    },
+    deliveryId: { type: String },
   },
   { timestamps: true },
 );
@@ -44,6 +45,7 @@ notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ role: 1, createdAt: -1 });
 notificationSchema.index({ broadcast: 1, createdAt: -1 });
 notificationSchema.index({ createdAt: -1 });
+notificationSchema.index({ deliveryId: 1 }, { unique: true, sparse: true });
 
 // auto-delete notifications older than 90 days
 notificationSchema.index(

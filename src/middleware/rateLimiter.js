@@ -4,7 +4,7 @@ const apiResponse = require("../utils/apiResponse");
 // general API rate limit — all routes
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
+  max: Number(process.env.RATE_LIMIT_MAX) || 100, // 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {

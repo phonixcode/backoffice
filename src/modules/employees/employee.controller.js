@@ -3,9 +3,11 @@ const asyncHandler = require('../../utils/asyncHandler');
 const apiResponse = require('../../utils/apiResponse');
 const Joi = require('joi');
 
+const objectId = Joi.string().hex().length(24);
+
 const createSchema = Joi.object({
-  userId:         Joi.string().required(),
-  department:     Joi.string().optional(),
+  userId:         objectId.required(),
+  department:     objectId.optional(),
   jobTitle:       Joi.string().required(),
   employmentType: Joi.string().valid('full_time', 'part_time', 'contract', 'intern').optional(),
   startDate:      Joi.date().required(),
@@ -15,7 +17,7 @@ const createSchema = Joi.object({
     frequency: Joi.string().valid('monthly', 'weekly', 'biweekly').optional()
   }).required(),
   phone:   Joi.string().optional(),
-  manager: Joi.string().optional(),
+  manager: objectId.optional(),
   address: Joi.object({
     street:  Joi.string().optional(),
     city:    Joi.string().optional(),
@@ -34,7 +36,7 @@ const updateSchema = Joi.object({
   department:       Joi.string().optional(),
   jobTitle:         Joi.string().optional(),
   employmentType:   Joi.string().valid('full_time', 'part_time', 'contract', 'intern').optional(),
-  employmentStatus: Joi.string().valid('active', 'suspended', 'terminated', 'resigned').optional(),
+  employmentStatus: Joi.string().valid('active', 'suspended', 'resigned').optional(),
   salary: Joi.object({
     amount:    Joi.number().optional(),
     currency:  Joi.string().optional(),
@@ -57,6 +59,13 @@ const updateSchema = Joi.object({
   }).optional()
 }).min(1);
 
+const terminateSchema = Joi.object({
+  endDate: Joi.date().iso().max('now').optional()
+    .messages({ 'date.max': 'Scheduled terminations are not supported; "endDate" must not be in the future' }),
+  reason:  Joi.string().valid('resignation', 'dismissal', 'redundancy', 'end_of_contract', 'retirement', 'other').optional(),
+  note:    Joi.string().trim().max(500).optional()
+});
+
 const employeeController = {
   getAll: asyncHandler(async (req, res) => {
     const result = await employeeService.getAllEmployees(req.query);
@@ -72,8 +81,11 @@ const employeeController = {
     const { error, value } = createSchema.validate(req.body);
     if (error) return apiResponse.error(res, error.details[0].message, 400);
 
-    const employee = await employeeService.createEmployee(value);
-    return apiResponse.success(res, 'Employee created successfully', { employee }, 201);
+    const { employee, deliveryIds } = await employeeService.createEmployee(value);
+    return apiResponse.success(res, 'Employee created successfully', {
+      employee,
+      delivery: { status: 'queued', deliveryIds }
+    }, 201);
   }),
 
   update: asyncHandler(async (req, res) => {
@@ -85,11 +97,18 @@ const employeeController = {
   }),
 
   terminate: asyncHandler(async (req, res) => {
-    const employee = await employeeService.terminateEmployee(
+    const { error, value } = terminateSchema.validate(req.body || {});
+    if (error) return apiResponse.error(res, error.details[0].message, 400);
+
+    const { employee, deliveryIds } = await employeeService.terminateEmployee(
       req.params.id,
-      req.body.endDate
+      value,
+      req.user._id
     );
-    return apiResponse.success(res, 'Employee terminated', { employee });
+    return apiResponse.success(res, 'Employee terminated', {
+      employee,
+      delivery: { status: 'queued', deliveryIds }
+    });
   })
 };
 

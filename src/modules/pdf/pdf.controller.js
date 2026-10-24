@@ -1,4 +1,4 @@
-const { pdfQueue }  = require('../../jobs/queue');
+const queues        = require('../../jobs/queue');
 const asyncHandler  = require('../../utils/asyncHandler');
 const apiResponse   = require('../../utils/apiResponse');
 const path          = require('path');
@@ -10,7 +10,7 @@ const pdfController = {
   payslip: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
 
-    const job = await pdfQueue.add({
+    const job = await queues.pdfQueue.add({
       type:      'payslip',
       payrollId: req.params.payrollId,
       userId:    req.user._id
@@ -31,7 +31,7 @@ const pdfController = {
 
     const jobId = uuidv4();
 
-    const job = await pdfQueue.add({
+    const job = await queues.pdfQueue.add({
       type:   'payroll-report',
       query:  req.query,
       userId: req.user._id
@@ -48,7 +48,7 @@ const pdfController = {
   leaveReport: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
 
-    const job = await pdfQueue.add({
+    const job = await queues.pdfQueue.add({
       type:   'leave-report',
       query:  req.query,
       userId: req.user._id
@@ -65,7 +65,7 @@ const pdfController = {
   auditReport: asyncHandler(async (req, res) => {
     const jobId = uuidv4();
 
-    const job = await pdfQueue.add({
+    const job = await queues.pdfQueue.add({
       type:   'audit-report',
       query:  req.query,
       userId: req.user._id
@@ -80,7 +80,7 @@ const pdfController = {
   }),
 
   jobStatus: asyncHandler(async (req, res) => {
-    const job = await pdfQueue.getJob(req.params.jobId);
+    const job = await queues.pdfQueue.getJob(req.params.jobId);
 
     if (!job) {
       return apiResponse.error(res, 'Job not found', 404);
